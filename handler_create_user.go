@@ -57,3 +57,25 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 		},
 	})
 }
+
+func (cfg *apiConfig) handlerGetUsers(w http.ResponseWriter, r *http.Request){
+	dbUsers, err := cfg.db.GetUser(r.Context())
+	if err != nil{
+		respondWithError(w, http.StatusNotFound, "No Users Found", err)
+		return
+	}
+	
+	users := []User{}
+	for _, dbUser := range dbUsers{
+		users = append(users, User{
+			ID: dbUser.ID,
+			CreatedAt: dbUser.CreatedAt,
+			UpdatedAt: dbUser.UpdatedAt,
+			Name: dbUser.Name,
+			IsAdmin: dbUser.IsAdmin,
+			IsTeamhead: dbUser.IsTeamhead,
+		})
+	}
+	respondWithJSON(w, http.StatusOK, users)
+	
+}
