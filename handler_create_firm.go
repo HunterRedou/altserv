@@ -7,6 +7,7 @@ import (
 	
 	"github.com/google/uuid"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/evatr"
 )
 
 type Firm struct{
@@ -21,7 +22,7 @@ type Firm struct{
 
 func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 	type parameters struct{
-		Email string `json:"name"`
+		Email string `json:"email"`
 		UstId string `json:"ustId"`
 		StreetName string `json:"streetName"`
 		Plz string `json:"plz"`
@@ -38,26 +39,43 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 		return
 	}
 
-	firm, err := cfg.db.CreateFirm(r.Context(), db.CreateUserParams{
+	vatResp, err := cfg.evatr.CheckUst(
+		r.Context(),
+		evatr.ApiReq{
+			RequestingVATID: cfg.reqVATID,
+			RequestedVATID: params.UstId,
+		},
+	)
+	if err != nil{
+		respondWithError(w, http.StatusBadGateway, "Couldn't verify UstId", err)
+		return
+	}
+
+	if vatResp.Status != "evatr-0000"{
+		respondWithError(w, http.StatusBadRequest, "UstId is not Valid", nil)
+		return
+	}
+
+	firm, err := cfg.db.CreateFirm(r.Context(), db.CreateFirmParams{
 		Email: params.Email,
-		UstId: params.UstId,
-		StreetName: params.StreetName,
+		Ustid: params.UstId,
+		Streetname: params.StreetName,
 		Plz: params.Plz,
 	})
 	if err != nil{
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create a User", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create a Firm", err)
 		return
 	}
 
 	respondWithJSON(w, http.StatusCreated, response{
-		User: User{
-			ID:	user.ID,
-			CreatedAt:	user.CreatedAt,
-			UpdatedAt:	user.UpdatedAt,
-			Email:	user.Email,
-			UstId:	user.UstId,
-			StreetName:	user.StreetName,
-			Plz:	user.Plz,
+		Firm: Firm{
+			ID:	firm.ID,
+			CreatedAt:	firm.CreatedAt,
+			UpdatedAt:	firm.UpdatedAt,
+			Email:	firm.Email,
+			UstId:	firm.Ustid,
+			StreetName:	firm.Streetname,
+			Plz:	firm.Plz,
 		},
 	})
 }
