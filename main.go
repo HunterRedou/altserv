@@ -51,7 +51,7 @@ func main(){
 	}
 
 	reqVATID := os.Getenv("EVATR_ID")
-	if reqVATID != ""{
+	if reqVATID == ""{
 		fmt.Printf("EVATR_ID must be set")
 		return
 	}

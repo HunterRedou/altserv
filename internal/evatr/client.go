@@ -46,6 +46,8 @@ func (c *Client) CheckUst(ctx context.Context, req ApiReq) (*ApiRes, error){
 	if err != nil{
 		return nil, fmt.Errorf("send eVATR request: %w", err)
 	}
+
+	fmt.Printf("eVATR request: %s\n", body)
 	
 	httpRequest, err := http.NewRequestWithContext(
 		ctx,
