@@ -7,6 +7,7 @@ import (
 	
 	"github.com/google/uuid"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/evatr"
 )
 
@@ -18,6 +19,7 @@ type Firm struct{
 	UstId		string `json:"ustId"`
 	StreetName		string `json:"streetName"`
 	Plz		string `json:"plz"`
+	Password		string `json:"-"`
 }
 
 func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
@@ -26,6 +28,7 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 		UstId string `json:"ustId"`
 		StreetName string `json:"streetName"`
 		Plz string `json:"plz"`
+		Password string `json:"password"`
 	}
 	type response struct{
 		Firm
@@ -36,6 +39,12 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil{
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash Password", err)
 		return
 	}
 
@@ -61,6 +70,7 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 		Ustid: params.UstId,
 		Streetname: params.StreetName,
 		Plz: params.Plz,
+		HashedPassword: hashedPassword,
 	})
 	if err != nil{
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create a Firm", err)

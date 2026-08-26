@@ -7,6 +7,7 @@ import (
 	
 	"github.com/google/uuid"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/auth"
 )
 
 type User struct{
@@ -16,6 +17,8 @@ type User struct{
 	Name		string `json:"name"`
 	IsAdmin		bool `json:"is_admin"`
 	IsTeamhead		bool `json:"is_teamhead"`
+	Password		string `json:"-"`
+	Email		string `json:"email"`
 }
 
 func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
@@ -23,6 +26,8 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 		Name string `json:"name"`
 		IsAdmin bool `json:"is_admin"`
 		IsTeamhead bool `json:"is_teamhead"`
+		Password string `json:"password"`
+		Email string `json:"email"`
 	}
 	type response struct{
 		User
@@ -36,10 +41,18 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 		return
 	}
 
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil{
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash Password", err)
+		return
+	}
+
 	user, err := cfg.db.CreateUser(r.Context(), db.CreateUserParams{
 		Name: params.Name,
 		IsAdmin: params.IsAdmin,
 		IsTeamhead: params.IsTeamhead,
+		HashedPassword: hashedPassword,
+		Email: params.Email,
 	})
 	if err != nil{
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create a User", err)

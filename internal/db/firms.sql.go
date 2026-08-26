@@ -10,7 +10,7 @@ import (
 )
 
 const createFirm = `-- name: CreateFirm :one
-INSERT INTO firms (id, created_at, updated_at, email, ustId, streetName, plz)
+INSERT INTO firms (id, created_at, updated_at, email, ustId, streetName, plz, hashed_password)
 VALUES (
   gen_random_uuid(),
   NOW(),
@@ -18,16 +18,18 @@ VALUES (
   $1,
   $2,
   $3,
-  $4
+  $4,
+  $5
 )
-RETURNING id, created_at, updated_at, email, ustid, streetname, plz
+RETURNING id, created_at, updated_at, email, ustid, streetname, plz, hashed_password
 `
 
 type CreateFirmParams struct {
-	Email      string
-	Ustid      string
-	Streetname string
-	Plz        string
+	Email          string
+	Ustid          string
+	Streetname     string
+	Plz            string
+	HashedPassword string
 }
 
 func (q *Queries) CreateFirm(ctx context.Context, arg CreateFirmParams) (Firm, error) {
@@ -36,6 +38,7 @@ func (q *Queries) CreateFirm(ctx context.Context, arg CreateFirmParams) (Firm, e
 		arg.Ustid,
 		arg.Streetname,
 		arg.Plz,
+		arg.HashedPassword,
 	)
 	var i Firm
 	err := row.Scan(
@@ -46,6 +49,7 @@ func (q *Queries) CreateFirm(ctx context.Context, arg CreateFirmParams) (Firm, e
 		&i.Ustid,
 		&i.Streetname,
 		&i.Plz,
+		&i.HashedPassword,
 	)
 	return i, err
 }

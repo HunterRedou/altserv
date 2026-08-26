@@ -11,20 +11,23 @@ import (
 )
 
 type Firm struct {
-	ID         uuid.UUID
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Email      string
-	Ustid      string
-	Streetname string
-	Plz        string
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Email          string
+	Ustid          string
+	Streetname     string
+	Plz            string
+	HashedPassword string
 }
 
 type User struct {
-	ID         uuid.UUID
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Name       string
-	IsAdmin    bool
-	IsTeamhead bool
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Name           string
+	IsAdmin        bool
+	IsTeamhead     bool
+	HashedPassword string
+	Email          string
 }
