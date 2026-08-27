@@ -15,7 +15,7 @@ import (
 const getByEmail = `-- name: GetByEmail :one
 SELECT users.id, users.created_at, users.updated_at, name, is_admin, is_teamhead, users.hashed_password, users.email, firms.id, firms.created_at, firms.updated_at, firms.email, ustid, streetname, plz, firms.hashed_password FROM users
 INNER JOIN firms
-  ON users.email = firms.email
+  ON users.email = firms.email AND users.hashed_password = firms.hashed_password
 WHERE users.email = $1
 `
 
