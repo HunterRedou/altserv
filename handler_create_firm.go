@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/auth"
-	"github.com/HunterRedou/altserv/internal/evatr"
+	"github.com/HunterRedou/altserv/internal/vies"
 )
 
 type Firm struct{
@@ -48,22 +48,16 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 		return
 	}
 
-	vatResp, err := cfg.evatr.CheckUst(
-		r.Context(),
-		evatr.ApiReq{
-			RequestingVATID: cfg.reqVATID,
-			RequestedVATID: params.UstId,
-		},
-	)
+	valid, err := vies.IsValidUST(r.Context(), params.UstId)
 	if err != nil{
 		respondWithError(w, http.StatusBadGateway, "Couldn't verify UstId", err)
 		return
 	}
-
-	if vatResp.Status != "evatr-0000"{
-		respondWithError(w, http.StatusBadRequest, "UstId is not Valid", nil)
+	if !valid {
+		respondWithError(w, http.StatusBadRequest, "UstId is not valid", nil)
 		return
 	}
+
 
 	firm, err := cfg.db.CreateFirm(r.Context(), db.CreateFirmParams{
 		Email: params.Email,

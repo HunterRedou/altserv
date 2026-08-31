@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/HunterRedou/altserv/internal/db"
-	"github.com/HunterRedou/altserv/internal/evatr"
 	"github.com/joho/godotenv"
 
 	_ "github.com/lib/pq"
@@ -19,8 +18,6 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db *db.Queries
 	platform string
-	evatr *evatr.Client
-	reqVATID string
 }
 
 func main(){
@@ -50,18 +47,11 @@ func main(){
 		return
 	}
 
-	reqVATID := os.Getenv("EVATR_ID")
-	if reqVATID == ""{
-		fmt.Printf("EVATR_ID must be set")
-		return
-	}
 
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
 		platform: platformType,
-		evatr: evatr.NewClient(),
-		reqVATID: reqVATID,
 	}
 
 
@@ -78,7 +68,7 @@ func main(){
 		Handler: mux,
 	}
 
-	log.Printf("Serving on port: %s\n", home, port)
+	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe())
 }
 

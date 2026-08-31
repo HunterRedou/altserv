@@ -5,13 +5,16 @@ import (
 	"net/http"
 
 	"github.com/HunterRedou/altserv/internal/auth"
+	"github.com/HunterRedou/altserv/internal/vies"
 )
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request){
 	type parameters struct{
 		Password string `json:"password"`
 		Email string `json:"email"`
+		UstId string `json:"ustid"`
 	}
+
 	type response struct{
 		User
 	}
@@ -36,12 +39,23 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
+	valid, err := vies.IsValidUST(r.Context(), params.UstId)
+	if err != nil{
+		respondWithError(w, http.StatusBadGateway, "Couldn't verify UstId", err)
+		return
+	}
+	if !valid {
+		respondWithError(w, http.StatusBadRequest, "UstId is not valid", nil)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, response{
 		User: User{
-			ID:		user.ID,
-			Email:		user.Email,
-			CreatedAt:		user.CreatedAt,
-			UpdatedAt:		user.UpdatedAt,
+			ID:	user.ID,
+			Email:	user.Email,
+			CreatedAt:	user.CreatedAt,
+			UpdatedAt:	user.UpdatedAt,
 		},
 	})
+
 }
