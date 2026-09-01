@@ -3,6 +3,7 @@ package vies
 import(
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -119,4 +120,35 @@ func IsValidUST(ctx context.Context, ustID string) (bool, error){
 		return false, err
 	}
 	return res.IsValid, nil
+}
+
+func CheckWithRetry(ctx context.Context, ustID string, maxAtt int, backoff time.Duration) (bool, error){
+	if len(ustID) < 3{
+		return false, fmt.Errorf("ustID %d too short", ustID)
+	}
+
+	countyCode, ustNumber := ustID[:2], ustID[2:]
+	client := NewClient()
+
+	var lastErr error
+	for attempt := 1; attempt <= maxAtt; attempt++{
+		res ,err := client.CheckUst(ctx, countyCode, ustNumber)
+		if err == nil{
+			return res.IsValid, nil
+		}
+		lastErr = err
+
+		var apiErr *ApiError
+		if !errors.As(err, &apiErr) || !apiErr.Transient{
+			return false, err
+		}
+		if attempt < maxAtt {
+			select{
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(backoff * time.Duration(attempt)):
+			}
+		}
+	}
+	return false, lastErr
 }

@@ -48,7 +48,7 @@ func (cfg *apiConfig) handlerFirm(w http.ResponseWriter, r *http.Request)  {
 		return
 	}
 
-	valid, err := vies.IsValidUST(r.Context(), params.UstId)
+	valid, err := vies.CheckWithRetry(r.Context(), params.UstId, 4, 3*time.Second)
 	if err != nil{
 		respondWithError(w, http.StatusBadGateway, "Couldn't verify UstId", err)
 		return
