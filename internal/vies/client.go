@@ -152,3 +152,22 @@ func CheckWithRetry(ctx context.Context, ustID string, maxAtt int, backoff time.
 	}
 	return false, lastErr
 }
+
+func (cfg *apiConfig) verifyFirmsAsync(firmID uuid.UUID, ustID string) {
+	go func() {
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+		defer cancel()
+
+		valid, err := vies.CheckWithRetry(ctx, ustID, 6, 4*time.Hour)
+		switch {
+		case err != nil:
+			return cfg.verifyFirmsAsync(firmID, ustID)
+		case valid:
+			// cfg.db.update 
+		default:
+			// cfg.db.delete
+		}
+		
+	}()
+}
