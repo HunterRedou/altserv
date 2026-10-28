@@ -21,7 +21,7 @@ VALUES (
   $4,
   $5
 )
-RETURNING id, created_at, updated_at, email, ustid, streetname, plz, hashed_password
+RETURNING id, created_at, updated_at, email, ustid, streetname, plz, hashed_password, status
 `
 
 type CreateFirmParams struct {
@@ -50,6 +50,7 @@ func (q *Queries) CreateFirm(ctx context.Context, arg CreateFirmParams) (Firm, e
 		&i.Streetname,
 		&i.Plz,
 		&i.HashedPassword,
+		&i.Status,
 	)
 	return i, err
 }

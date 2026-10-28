@@ -19,6 +19,7 @@ type Firm struct {
 	Streetname     string
 	Plz            string
 	HashedPassword string
+	Status         string
 }
 
 type User struct {
