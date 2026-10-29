@@ -1,6 +1,5 @@
 -- name: GetByEmail :one
 SELECT * FROM users
 INNER JOIN firms
-  ON users.email = firms.email AND users.hashed_password = firms.hashed_password
+  ON firms.id = users.firm_id
 WHERE users.email = $1;
-

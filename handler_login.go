@@ -53,6 +53,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request){
 		User: User{
 			ID:	user.ID,
 			Email:	user.Email,
+			FirmID:	user.FirmID,
 			CreatedAt:	user.CreatedAt,
 			UpdatedAt:	user.UpdatedAt,
 		},

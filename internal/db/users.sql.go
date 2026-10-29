@@ -7,10 +7,12 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, name, is_admin, is_teamhead, hashed_password, email)
+INSERT INTO users (id, created_at, updated_at, name, is_admin, is_teamhead, hashed_password, email, firm_id)
 VALUES (
   gen_random_uuid(),
   NOW(),
@@ -19,9 +21,10 @@ VALUES (
   $2,
   $3,
   $4,
-  $5
+  $5,
+  $6
 )
-RETURNING id, created_at, updated_at, name, is_admin, is_teamhead, hashed_password, email
+RETURNING id, created_at, updated_at, name, is_admin, is_teamhead, hashed_password, email, firm_id
 `
 
 type CreateUserParams struct {
@@ -30,6 +33,7 @@ type CreateUserParams struct {
 	IsTeamhead     bool
 	HashedPassword string
 	Email          string
+	FirmID         uuid.UUID
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -39,6 +43,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.IsTeamhead,
 		arg.HashedPassword,
 		arg.Email,
+		arg.FirmID,
 	)
 	var i User
 	err := row.Scan(
@@ -50,6 +55,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsTeamhead,
 		&i.HashedPassword,
 		&i.Email,
+		&i.FirmID,
 	)
 	return i, err
 }

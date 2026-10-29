@@ -19,6 +19,7 @@ type User struct{
 	IsTeamhead		bool `json:"is_teamhead"`
 	Password		string `json:"-"`
 	Email		string `json:"email"`
+	FirmID		uuid.UUID `json:"firm_id"`
 }
 
 func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
@@ -28,6 +29,7 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 		IsTeamhead bool `json:"is_teamhead"`
 		Password string `json:"password"`
 		Email string `json:"email"`
+		FirmID string `json:"firm_id"`
 	}
 	type response struct{
 		User
@@ -38,6 +40,12 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	firmID, err := uuid.Parse(params.FirmID)
+	if err != nil{
+		respondWithError(w, http.StatusBadRequest, "Invalid firm_id", err)
 		return
 	}
 
@@ -53,6 +61,7 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 		IsTeamhead: params.IsTeamhead,
 		HashedPassword: hashedPassword,
 		Email: params.Email,
+		FirmID: firmID,
 	})
 	if err != nil{
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create a User", err)
@@ -67,6 +76,7 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 			Name:	user.Name,
 			IsAdmin:	user.IsAdmin,
 			IsTeamhead:	user.IsTeamhead,
+			FirmID:	user.FirmID,
 		},
 	})
 }
@@ -87,6 +97,7 @@ func (cfg *apiConfig) handlerGetUsers(w http.ResponseWriter, r *http.Request){
 			Name: dbUser.Name,
 			IsAdmin: dbUser.IsAdmin,
 			IsTeamhead: dbUser.IsTeamhead,
+			FirmID: dbUser.FirmID,
 		})
 	}
 	respondWithJSON(w, http.StatusOK, users)

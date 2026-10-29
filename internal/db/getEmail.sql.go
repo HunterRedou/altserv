@@ -13,9 +13,9 @@ import (
 )
 
 const getByEmail = `-- name: GetByEmail :one
-SELECT users.id, users.created_at, users.updated_at, name, is_admin, is_teamhead, users.hashed_password, users.email, firms.id, firms.created_at, firms.updated_at, firms.email, ustid, streetname, plz, firms.hashed_password, status FROM users
+SELECT users.id, users.created_at, users.updated_at, name, is_admin, is_teamhead, users.hashed_password, users.email, firm_id, firms.id, firms.created_at, firms.updated_at, firms.email, ustid, streetname, plz, firms.hashed_password, status FROM users
 INNER JOIN firms
-  ON users.email = firms.email AND users.hashed_password = firms.hashed_password
+  ON firms.id = users.firm_id
 WHERE users.email = $1
 `
 
@@ -28,6 +28,7 @@ type GetByEmailRow struct {
 	IsTeamhead       bool
 	HashedPassword   string
 	Email            string
+	FirmID           uuid.UUID
 	ID_2             uuid.UUID
 	CreatedAt_2      time.Time
 	UpdatedAt_2      time.Time
@@ -51,6 +52,7 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (GetByEmailRow, 
 		&i.IsTeamhead,
 		&i.HashedPassword,
 		&i.Email,
+		&i.FirmID,
 		&i.ID_2,
 		&i.CreatedAt_2,
 		&i.UpdatedAt_2,

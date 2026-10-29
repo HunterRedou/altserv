@@ -31,4 +31,5 @@ type User struct {
 	IsTeamhead     bool
 	HashedPassword string
 	Email          string
+	FirmID         uuid.UUID
 }
