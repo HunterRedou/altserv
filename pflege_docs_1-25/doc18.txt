@@ -1,0 +1,4 @@
+PUNKT 18 - Server und Konfiguration
+=================================================================
+
+internal/server: server.go, router.go, routes.go, errors.go, response.go. Go net/http als Ausgangspunkt. ReadHeaderTimeout, ReadTimeout, WriteTimeout, IdleTimeout, Request-Groessenlimits, Graceful Shutdown, strukturierte Fehler. internal/config: config.go, validation.go. Datenbank-URL, Session-Dauer, Schluesselreferenzen und Port konfigurierbar. Secrets nicht im Quellcode, Git oder Logs speichern.

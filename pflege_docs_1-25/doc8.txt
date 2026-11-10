@@ -1,0 +1,4 @@
+PUNKT 08 - Patientenverwaltung
+=================================================================
+
+Modul internal/patients mit handler.go, service.go, repository.go, model.go, service_test.go. Patienten: id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, created_at, updated_at. Spaeter Adressen und Versicherungsdaten getrennt modellieren. Beziehungen und Vorlagen ueber IDs, nicht ueber Namen. Berechtigungen auf jedem Zugriff pruefen. Tests fuer Namensgleichheit, Tenant-Grenzen, Vertretungen, ungueltige Eingaben und Verschluesselung.

@@ -1,0 +1,4 @@
+PUNKT 22 - Architecture Decision Records
+=================================================================
+
+docs/decisions/ADR-001-go-backend.md, ADR-002-postgresql.md, ADR-003-modular-monolith.md, ADR-004-shared-database-tenants.md, ADR-005-sqlc.md, ADR-006-session-auth.md, ADR-007-patient-encryption.md, ADR-008-audit-logging.md, ADR-009-no-generative-ai.md. Jedes ADR: Problem, Alternativen, Entscheidung, Gruende, Konsequenzen und Risiken. Hilft bei Refactoring und Abschlussprojektdokumentation.

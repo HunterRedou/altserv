@@ -1,0 +1,182 @@
+package main
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/HunterRedou/altserv/internal/activities"
+	"github.com/HunterRedou/altserv/internal/assignments"
+	"github.com/HunterRedou/altserv/internal/catalog"
+	"github.com/HunterRedou/altserv/internal/patients"
+	"github.com/HunterRedou/altserv/internal/server"
+	"github.com/HunterRedou/altserv/internal/templates"
+	"github.com/HunterRedou/altserv/internal/visits"
+)
+
+// routes builds the handler tree. The route table itself lives in
+// internal/server so it can be tested without the database.
+func (cfg *apiConfig) routes() http.Handler {
+	patientHandler := cfg.patientHandler()
+	assignmentHandler := cfg.assignmentHandler()
+	catalogHandler := cfg.catalogHandler()
+	activityHandler := cfg.activityHandler()
+	templateHandler := cfg.templateHandler()
+	visitHandler := cfg.visitHandler()
+
+	return server.NewRouter(server.Handlers{
+		App:                     cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))),
+		Reset:                   cfg.handlerReset,
+		Tenant:                  cfg.handlerCreateTenant,
+		Login:                   cfg.middlewareLoginRateLimit(cfg.handlerLogin),
+		Logout:                  cfg.handlerLogout,
+		Me:                      cfg.handlerMe,
+		Users:                   cfg.handlerGetUsers,
+		Create:                  cfg.handlerUser,
+		PatientCreate:           patientHandler.Create,
+		PatientList:             patientHandler.List,
+		PatientGet:              patientHandler.Get,
+		PatientUpdate:           patientHandler.Update,
+		AssignmentCreate:        assignmentHandler.Create,
+		AssignmentListByPatient: assignmentHandler.ListByPatient,
+		AssignmentList:          assignmentHandler.List,
+		AssignmentRevoke:        assignmentHandler.Revoke,
+		CatalogList:             catalogHandler.ListCatalogs,
+		CatalogGet:              catalogHandler.GetCatalog,
+		DefinitionSearch:        catalogHandler.SearchDefinitions,
+		DefinitionGet:           catalogHandler.GetDefinition,
+		ContractList:            catalogHandler.ListContracts,
+		ContractGet:             catalogHandler.GetContract,
+		ContractCreate:          catalogHandler.CreateContract,
+		ActivityCreate:          activityHandler.Create,
+		ActivityList:            activityHandler.List,
+		ActivityListByPatient:   activityHandler.ListByPatient,
+		ActivityGet:             activityHandler.Get,
+		ActivityRuleList:        catalogHandler.ListRules,
+		ActivityRuleCreate:      catalogHandler.CreateRule,
+		TemplateCreate:          templateHandler.Create,
+		TemplateListByPatient:   templateHandler.ListByPatient,
+		TemplateGet:             templateHandler.Get,
+		TemplateUpdate:          templateHandler.Update,
+		TemplateArchive:         templateHandler.Archive,
+		VisitCreate:             visitHandler.Create,
+		VisitListByPatient:      visitHandler.ListByPatient,
+		VisitGet:                visitHandler.Get,
+		VisitReschedule:         visitHandler.Reschedule,
+		VisitStart:              visitHandler.Start,
+		VisitComplete:           visitHandler.Complete,
+		VisitCancel:             visitHandler.Cancel,
+		VisitCorrect:            visitHandler.Correct,
+		Auth:                    cfg.middlewareAuth,
+		CSRF:                    cfg.middlewareCSRF,
+		RequestID:               cfg.middlewareRequestID,
+		Global:                  cfg.globalMiddleware,
+	})
+}
+
+// globalMiddleware applies transport-level hardening to every route. RequestID
+// runs outside this chain, so the logs and panic reports can correlate events.
+func (cfg *apiConfig) globalMiddleware(next http.Handler) http.Handler {
+	return cfg.middlewareRecover(
+		cfg.middlewareSecurityHeaders(
+			cfg.middlewareBodyLimit(
+				cfg.middlewareLogging(next),
+			),
+		),
+	)
+}
+
+func (cfg *apiConfig) patientHandler() *patients.Handler {
+	return patients.NewHandler(cfg.patientService, cfg.withTenant, actorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) assignmentHandler() *assignments.Handler {
+	return assignments.NewHandler(cfg.assignmentService, cfg.withTenant, assignmentActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) catalogHandler() *catalog.Handler {
+	return catalog.NewHandler(cfg.catalogService, cfg.withTenant, catalogActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) activityHandler() *activities.Handler {
+	return activities.NewHandler(cfg.activityService, cfg.withTenant, activityActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) templateHandler() *templates.Handler {
+	return templates.NewHandler(cfg.templateService, cfg.withTenant, templateActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) visitHandler() *visits.Handler {
+	return visits.NewHandler(cfg.visitService, cfg.withTenant, visitActorFromContext, requestIDFromContext)
+}
+
+func actorFromContext(ctx context.Context) (patients.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return patients.Actor{}, false
+	}
+	return patients.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func assignmentActorFromContext(ctx context.Context) (assignments.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return assignments.Actor{}, false
+	}
+	return assignments.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func catalogActorFromContext(ctx context.Context) (catalog.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return catalog.Actor{}, false
+	}
+	return catalog.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func activityActorFromContext(ctx context.Context) (activities.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return activities.Actor{}, false
+	}
+	return activities.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func templateActorFromContext(ctx context.Context) (templates.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return templates.Actor{}, false
+	}
+	return templates.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func visitActorFromContext(ctx context.Context) (visits.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return visits.Actor{}, false
+	}
+	return visits.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}

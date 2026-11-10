@@ -1,0 +1,19 @@
+REMINDER: platform_admin patient data access
+=============================================
+
+Decision for now (agreed during Step 6):
+- A platform_admin must NOT get automatic access to patient health data.
+- Patient access is allowed only for:
+  * chef: all patients in the chef's own tenant
+  * employee: only patients with a currently valid, non-revoked assignment
+- platform_admin may manage tenants and users, but not patient data.
+
+Why:
+- doc 4: "Plattform-Admin erhaelt nicht automatisch Zugriff auf Gesundheitsdaten."
+
+Review this decision later:
+- If support or incident response needs cross-tenant patient access, add an explicit
+  break-glass flow with a reason, time limit, and audit event.
+- Do not weaken the default rule for all platform admins.
+- Check this file when platform-admin features, support tooling, or cross-tenant
+  reporting are implemented.

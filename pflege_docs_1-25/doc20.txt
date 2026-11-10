@@ -1,0 +1,4 @@
+PUNKT 20 - Deployment und Ausfallsicherheit
+=================================================================
+
+deployments/docker und deployments/monitoring sowie Runbooks fuer Datenbankwiederherstellung, Schluesselrotation, Incident Response. Health-Checks, kontrollierte Neustarts, Backups, Point-in-Time-Recovery, Restore-Uebungen, Monitoring, Alarmierung, Lasttests, SQL EXPLAIN ANALYZE. Kennzahlen: Latenz, Fehlerrate, Pool-Auslastung, langsame Queries, fehlgeschlagene Logins, Jobfehler, Backup-Alter. Monitoring darf keine unnoetigen Gesundheitsdaten an Dritte uebertragen. Ressource: https://sre.google/sre-book/table-of-contents/

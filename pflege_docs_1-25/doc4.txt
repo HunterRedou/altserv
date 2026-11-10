@@ -1,0 +1,4 @@
+PUNKT 04 - Benutzer und Rechte
+=================================================================
+
+Authentication beantwortet: Wer ist angemeldet? Authorization: Welche Aktion ist erlaubt? Assignment: Fuer welchen Patienten? Rollen: Plattform-Admin, Chef, Mitarbeiter. Plattform-Admin erhaelt nicht automatisch Zugriff auf Gesundheitsdaten. Chef verwaltet eigene Mitarbeiter und Patienten; Mitarbeiter sieht zugewiesene Patienten. RBAC mit objektbezogenen und attributbasierten Regeln kombinieren (Tenant, Zuordnung, Gueltigkeit, Berichtstatus). Berechtigungen im Backend und bei Bedarf in RLS erzwingen. Ressource: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html

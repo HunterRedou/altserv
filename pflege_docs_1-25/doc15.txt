@@ -1,0 +1,4 @@
+PUNKT 15 - Audit Logging
+=================================================================
+
+audit_events: id, tenant_id, actor_user_id, action, entity_type, entity_id, occurred_at, request_id, metadata. Erfassen: Login/Logout, Patientenaenderung, Zuordnung, Vorlagen, Berichtfreigabe, Abrechnungsexport, Rollenwechsel, verweigerte Zugriffe. Append-only, eingeschraenkte Leserechte, Schutz vor privilegierter Manipulation. Keine unnoetigen Gesundheitsdaten oder vollstaendigen before/after-Dumps loggen. Rechtlich begruendete Aufbewahrungs- und Loeschfristen gelten auch fuer Auditdaten.

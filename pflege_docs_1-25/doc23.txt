@@ -1,0 +1,4 @@
+PUNKT 23 - Entwicklungsroadmap
+=================================================================
+
+Phase 1: Go, HTTP, PostgreSQL, Migrationen. Phase 2: Datenmodell, sqlc. Phase 3: Sessions, Argon2id, CSRF, Security-Basis. Phase 4: Tenant-Isolation, RBAC, Assignments, RLS. Phase 5: AES-GCM und geschuetzte Patientensuche. Phase 6: Leistungskatalog und Vorlagen. Phase 7: Einsaetze, Berichte, Freigaben, Audit. Phase 8: Regelbasierte Abrechnung, Exporte. Phase 9: Monitoring, Backup-Restore, Lasttests, Security-Review. Sicherheit in allen Phasen, keine echten Patientendaten in fruehen Tests. Zeitrahmen nur Richtwerte.

@@ -1,0 +1,4 @@
+PUNKT 03 - Multi-Tenant-Architektur
+=================================================================
+
+Mehrere Pflegeunternehmen nutzen eine Anwendung und eine PostgreSQL-Datenbank. Jede mandantengebundene Tabelle enthaelt tenant_id. Zusammengesetzte Schluessel und Fremdschluessel verhindern tenantuebergreifende Referenzen. Neue Unternehmen werden als Datensaetze angelegt, nicht durch neue Datenbanken oder generierten Go-Code. PostgreSQL Row Level Security (RLS) frueh einplanen: Policies, FORCE RLS, sichere DB-Rollen, SET LOCAL im Transaktionskontext, Pooling und negative Isolationstests. Ressource: https://www.postgresql.org/docs/current/ddl-rowsecurity.html

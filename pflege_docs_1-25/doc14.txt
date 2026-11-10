@@ -1,0 +1,4 @@
+PUNKT 14 - Regelbasierter Abrechnungsassistent
+=================================================================
+
+Keine generative KI. Bestaetigte Taetigkeiten -> gueltiger Vertrag -> Leistungskatalog -> deterministische Regeln -> pruefbare Vorschlaege -> Chef-Freigabe. Pruefen: Gueltigkeit, Voraussetzungen, Ausschluesse, Kombinationsregeln, Doppelabrechnung, Berichtstatus. Module: rules.go, validator.go, export_pdf.go, export_csv.go, transmission.go. PDF/CSV zunaechst intern; fuer Kasseneinreichung konkrete Verfahren nach SGB XI Paragraph 105 bzw. SGB V Paragraph 302 und aktuelle technische Vorgaben klaeren. Keine ungesicherte Standard-E-Mail fuer Gesundheitsdaten.

@@ -1,0 +1,4 @@
+PUNKT 01 - Projektuebersicht
+=================================================================
+
+Ziel: Mandantenfaehige Pflege-SaaS fuer ambulante Pflegedienste in Brandenburg. Stack: Go, PostgreSQL, sqlc, modularer Monolith, serverseitige Sessions, AES-256-GCM. Kernfunktionen: Patienten, Mitarbeiter, Zuweisungen, Vorlagen, Pflegeberichte, regelbasierte Abrechnung ohne KI. Sicherheit, Datenschutz und Nachvollziehbarkeit sind zentrale Anforderungen.

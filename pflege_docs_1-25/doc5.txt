@@ -1,0 +1,4 @@
+PUNKT 05 - Patientenzuweisung und Krankheitsvertretung
+=================================================================
+
+patient_assignments: id, tenant_id, patient_id, employee_id, assigned_by, assignment_type, valid_from, valid_until, revoked_at. Chef kann regulaere und befristete Vertretungen vergeben und widerrufen. Mitarbeiter koennen keine eigenen Rechte vergeben. Zugriff wird bei jedem relevanten Request gegen aktuelle Gueltigkeit geprueft. Alle Aenderungen auditieren. Zusammengesetzte Fremdschluessel verhindern Zuordnungen zwischen Unternehmen.

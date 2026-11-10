@@ -1,0 +1,4 @@
+PUNKT 19 - Automatisierte Tests
+=================================================================
+
+tests/integration, tests/security, tests/e2e. Unit Tests fuer Regeln, Integrationstests gegen echte PostgreSQL, negative Berechtigungstests, Migrationstests, Konkurrenztests, Lasttests und Restore-Tests. Kritische Faelle: Tenant A darf B nicht lesen; Mitarbeiter nur zugewiesene Patienten; abgelaufene Vertretung verweigert; kein Rollen-Selbstupgrade; widerrufene Session ungueltig; eingereichte Berichte nicht still aenderbar; Transaktions-Rollback; manipulierte AES-GCM-Daten scheitern; keine sensiblen Logs; keine Doppelabrechnung. Ressourcen: https://go.dev/doc/tutorial/add-a-test und https://testcontainers.com/

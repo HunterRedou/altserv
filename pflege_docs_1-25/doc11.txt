@@ -1,0 +1,4 @@
+PUNKT 11 - Patientenspezifische Vorlagen
+=================================================================
+
+templates: id, tenant_id, patient_id, name, created_by, version, status. template_activities: template_id, activity_id, default_quantity, sort_order. Pro Patient mehrere Vorlagen (Morgenpflege, Abendpflege, Wochenende). Mitarbeiter koennen berechtigt erstellen und aendern. Vorlage wird beim Einsatz als Vorschlag geladen, nicht automatisch als durchgefuehrte Leistung bestaetigt. Versionsnummer und verwendete Vorlage im Bericht dokumentieren; historische Berichte unveraendert lassen.

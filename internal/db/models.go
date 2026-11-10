@@ -5,12 +5,155 @@
 package db
 
 import (
+	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-type Firm struct {
+type Activity struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	PatientID           uuid.UUID
+	EmployeeID          uuid.UUID
+	ServiceDefinitionID uuid.NullUUID
+	ContractID          uuid.NullUUID
+	PerformedAt         time.Time
+	DurationMinutes     int32
+	NoteEnc             []byte
+	NoteKeyVersion      sql.NullInt32
+	Status              string
+	ServiceCode         string
+	ServiceName         string
+	LegalArea           string
+	ContractReference   string
+	PayerName           string
+	CreatedBy           uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type ActivityServiceRule struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	ServiceDefinitionID uuid.UUID
+	ContractID          uuid.NullUUID
+	ActivityLabel       string
+	LegalArea           string
+	Criteria            json.RawMessage
+	ValidFrom           time.Time
+	ValidUntil          sql.NullTime
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type AuditEvent struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	ActorUserID uuid.NullUUID
+	Action      string
+	EntityType  string
+	EntityID    uuid.NullUUID
+	OccurredAt  time.Time
+	RequestID   string
+	Metadata    json.RawMessage
+}
+
+type Patient struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	FirstNameEnc []byte
+	LastNameEnc  []byte
+	BirthDateEnc []byte
+	Status       string
+	KeyVersion   int32
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type PatientAssignment struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	PatientID      uuid.UUID
+	EmployeeID     uuid.UUID
+	AssignedBy     uuid.UUID
+	AssignmentType string
+	ValidFrom      time.Time
+	ValidUntil     sql.NullTime
+	RevokedAt      sql.NullTime
+	CreatedAt      time.Time
+}
+
+type PatientSearchToken struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	PatientID  uuid.UUID
+	TokenHash  []byte
+	TokenType  string
+	KeyVersion int32
+	CreatedAt  time.Time
+}
+
+type ServiceCatalog struct {
+	ID         uuid.UUID
+	Code       string
+	Name       string
+	Region     string
+	SourceNote string
+	ValidFrom  time.Time
+	ValidUntil sql.NullTime
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type ServiceDefinition struct {
+	ID          uuid.UUID
+	CatalogID   uuid.UUID
+	Code        string
+	Name        string
+	Description string
+	LegalArea   string
+	Unit        string
+	ValidFrom   time.Time
+	ValidUntil  sql.NullTime
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type Session struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	CsrfToken string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
+	TenantID  uuid.UUID
+}
+
+type Template struct {
+	ID        uuid.UUID
+	TenantID  uuid.UUID
+	PatientID uuid.UUID
+	Name      string
+	CreatedBy uuid.UUID
+	Version   int32
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type TemplateActivity struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	TemplateID      uuid.UUID
+	ActivityID      uuid.UUID
+	DefaultQuantity int32
+	SortOrder       int32
+	CreatedAt       time.Time
+}
+
+type Tenant struct {
 	ID             uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -22,14 +165,41 @@ type Firm struct {
 	Status         string
 }
 
+type TenantServiceContract struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	ServiceDefinitionID uuid.UUID
+	PayerName           string
+	ContractReference   string
+	LegalArea           string
+	ValidFrom           time.Time
+	ValidUntil          sql.NullTime
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
 type User struct {
 	ID             uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Name           string
-	IsAdmin        bool
-	IsTeamhead     bool
 	HashedPassword string
 	Email          string
-	FirmID         uuid.UUID
+	TenantID       uuid.UUID
+	Role           string
+}
+
+type Visit struct {
+	ID               uuid.UUID
+	TenantID         uuid.UUID
+	PatientID        uuid.UUID
+	EmployeeID       uuid.UUID
+	ActualEmployeeID uuid.NullUUID
+	PlannedStart     time.Time
+	ActualStart      sql.NullTime
+	ActualEnd        sql.NullTime
+	Status           string
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }

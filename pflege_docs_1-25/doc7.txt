@@ -1,0 +1,4 @@
+PUNKT 07 - Verschluesselung und Hashing
+=================================================================
+
+Passwoerter: Argon2id (nicht reversibel). Zufallstokens: SHA-256 zur Speicherung eines Token-Fingerprints. Patientennamen und Pflegefreitext: AES-256-GCM, da sie wieder lesbar sein muessen. Nonces pro Schluessel niemals wiederverwenden; Auth-Tag pruefen; AAD kann Tenant/Datensatz/Feld binden. Schluesselversionen, Rotation und Speicherung ausserhalb der Datenbank ueber KMS/Secret Manager. Suchindex mit getrenntem HMAC-Schluessel nur nach Threat Modeling; Klartext-Namensindex wuerde Schutz unterlaufen. TLS fuer Transport, verschluesselte Backups. Ressourcen: https://pkg.go.dev/crypto/cipher und https://pkg.go.dev/golang.org/x/crypto/argon2

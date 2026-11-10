@@ -1,37 +1,71 @@
-package main 
+package main
 
 import (
-	"net/http"
 	"encoding/json"
+	"net/http"
 	"time"
-	
-	"github.com/google/uuid"
-	"github.com/HunterRedou/altserv/internal/db"
+
 	"github.com/HunterRedou/altserv/internal/auth"
+	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/google/uuid"
 )
 
-type User struct{
-	ID		uuid.UUID `json:"id"`
-	CreatedAt		time.Time `json:"created_at"`
-	UpdatedAt		time.Time `json:"updated_at"`
-	Name		string `json:"name"`
-	IsAdmin		bool `json:"is_admin"`
-	IsTeamhead		bool `json:"is_teamhead"`
-	Password		string `json:"-"`
-	Email		string `json:"email"`
-	FirmID		uuid.UUID `json:"firm_id"`
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Name      string    `json:"name"`
+	Role      string    `json:"role"`
+	Password  string    `json:"-"`
+	Email     string    `json:"email"`
+	TenantID  uuid.UUID `json:"tenant_id"`
 }
 
-func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
-	type parameters struct{
-		Name string `json:"name"`
-		IsAdmin bool `json:"is_admin"`
-		IsTeamhead bool `json:"is_teamhead"`
-		Password string `json:"password"`
-		Email string `json:"email"`
-		FirmID string `json:"firm_id"`
+// validRole keeps the API and the database CHECK constraint in sync.
+func validRole(role string) bool {
+	switch role {
+	case "platform_admin", "chef", "employee":
+		return true
 	}
-	type response struct{
+	return false
+}
+
+// canManageUsers reports whether a role may list and create users.
+// Employees only see their assigned patients (doc 4).
+func canManageUsers(role string) bool {
+	return role == "chef" || role == "platform_admin"
+}
+
+// canAssignRole prevents a chef from escalating an employee to platform admin.
+// A platform admin may create every role.
+func canAssignRole(actorRole, targetRole string) bool {
+	switch actorRole {
+	case "platform_admin":
+		return true
+	case "chef":
+		return targetRole == "chef" || targetRole == "employee"
+	}
+	return false
+}
+
+func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request) {
+	actor, ok := authUserFromContext(r.Context())
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+	if !canManageUsers(actor.Role) {
+		respondWithError(w, http.StatusForbidden, "Not allowed to create users", nil)
+		return
+	}
+
+	type parameters struct {
+		Name     string `json:"name"`
+		Role     string `json:"role"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	type response struct {
 		User
 	}
 
@@ -39,67 +73,89 @@ func (cfg *apiConfig) handlerUser(w http.ResponseWriter, r *http.Request)  {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		respondWithError(w, http.StatusBadRequest, "Couldn't decode parameters", err)
 		return
 	}
 
-	firmID, err := uuid.Parse(params.FirmID)
-	if err != nil{
-		respondWithError(w, http.StatusBadRequest, "Invalid firm_id", err)
+	if !validRole(params.Role) {
+		respondWithError(w, http.StatusBadRequest, "Invalid role", nil)
+		return
+	}
+	if !canAssignRole(actor.Role, params.Role) {
+		respondWithError(w, http.StatusForbidden, "Not allowed to assign this role", nil)
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(params.Password)
-	if err != nil{
+	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't hash Password", err)
 		return
 	}
 
-	user, err := cfg.db.CreateUser(r.Context(), db.CreateUserParams{
-		Name: params.Name,
-		IsAdmin: params.IsAdmin,
-		IsTeamhead: params.IsTeamhead,
-		HashedPassword: hashedPassword,
-		Email: params.Email,
-		FirmID: firmID,
+	// The tenant always comes from the session, never from the request body.
+	var user db.User
+	err = cfg.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		var err error
+		user, err = q.CreateUser(r.Context(), db.CreateUserParams{
+			Name:           params.Name,
+			Role:           params.Role,
+			HashedPassword: hashedPassword,
+			Email:          params.Email,
+			TenantID:       actor.TenantID,
+		})
+		return err
 	})
-	if err != nil{
+	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create a User", err)
 		return
 	}
 
 	respondWithJSON(w, http.StatusCreated, response{
 		User: User{
-			ID:	user.ID,
-			CreatedAt:	user.CreatedAt,
-			UpdatedAt:	user.UpdatedAt,
-			Name:	user.Name,
-			IsAdmin:	user.IsAdmin,
-			IsTeamhead:	user.IsTeamhead,
-			FirmID:	user.FirmID,
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Name:      user.Name,
+			Role:      user.Role,
+			Email:     user.Email,
+			TenantID:  user.TenantID,
 		},
 	})
 }
 
-func (cfg *apiConfig) handlerGetUsers(w http.ResponseWriter, r *http.Request){
-	dbUsers, err := cfg.db.GetUser(r.Context())
-	if err != nil{
-		respondWithError(w, http.StatusNotFound, "No Users Found", err)
+func (cfg *apiConfig) handlerGetUsers(w http.ResponseWriter, r *http.Request) {
+	actor, ok := authUserFromContext(r.Context())
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
-	
+	if !canManageUsers(actor.Role) {
+		respondWithError(w, http.StatusForbidden, "Not allowed to list users", nil)
+		return
+	}
+
 	users := []User{}
-	for _, dbUser := range dbUsers{
-		users = append(users, User{
-			ID: dbUser.ID,
-			CreatedAt: dbUser.CreatedAt,
-			UpdatedAt: dbUser.UpdatedAt,
-			Name: dbUser.Name,
-			IsAdmin: dbUser.IsAdmin,
-			IsTeamhead: dbUser.IsTeamhead,
-			FirmID: dbUser.FirmID,
-		})
+	err := cfg.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		dbUsers, err := q.ListUsersByTenant(r.Context(), actor.TenantID)
+		if err != nil {
+			return err
+		}
+		for _, dbUser := range dbUsers {
+			users = append(users, User{
+				ID:        dbUser.ID,
+				CreatedAt: dbUser.CreatedAt,
+				UpdatedAt: dbUser.UpdatedAt,
+				Name:      dbUser.Name,
+				Role:      dbUser.Role,
+				Email:     dbUser.Email,
+				TenantID:  dbUser.TenantID,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't list users", err)
+		return
 	}
 	respondWithJSON(w, http.StatusOK, users)
-	
 }

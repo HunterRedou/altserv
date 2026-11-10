@@ -1,0 +1,4 @@
+PUNKT 25 - Bewusst nicht in Version 1
+=================================================================
+
+Keine Microservices, Kafka, Kubernetes, generative KI, eigene Mobile-App, komplexe Tourenoptimierung, automatische Direktuebermittlung an alle Pflegekassen, grosse Dashboards, eigener Identity Provider oder Offline-Multidevice-Sync. Erst einen sicheren, testbaren, nachvollziehbaren Kernprozess fertigstellen. Erweiterungen erst bei nachgewiesenem Bedarf.

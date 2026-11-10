@@ -1,0 +1,4 @@
+PUNKT 17 - HTTP Middleware
+=================================================================
+
+middleware/: request_id.go, recover.go, security_headers.go, rate_limit.go, session.go, authentication.go, tenant_context.go, csrf.go, authorization.go, logging.go. Request-ID, sichere Header, Sessions, Rate Limits und grobe Rollenpruefungen zentral behandeln. Objektbezogene Patientenrechte im Service/Query pruefen, nicht nur in Middleware. Tenant-Kontext aus authentifizierter Identitaet ableiten, niemals blind aus Client-Headern. Go context.Context und net/http lernen.

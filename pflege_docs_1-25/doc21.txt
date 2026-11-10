@@ -1,0 +1,4 @@
+PUNKT 21 - DSGVO und rechtliche Anforderungen
+=================================================================
+
+docs/compliance: data-classification.md, processing-activities.md, privacy-impact-assessment.md, retention-policy.md, deletion-policy.md, access-control-policy.md, incident-response.md, backup-policy.md, billing-requirements.md. Verantwortliche/Auftragsverarbeiter klaeren; ggf. AV-Vertraege nach Art. 28 DSGVO; DSFA nach Art. 35 pruefen; Zweckbindung, Datenminimierung, Aufbewahrung, Loeschung, Hosting, Betroffenenrechte und Vorfallmeldung planen. Vor Produktivbetrieb fachkundige Datenschutz- und Abrechnungspruefung. Ressourcen: https://eur-lex.europa.eu/eli/reg/2016/679/oj und https://www.lda.brandenburg.de/

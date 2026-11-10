@@ -1,0 +1,4 @@
+PUNKT 12 - Pflegeeinsaetze
+=================================================================
+
+Patient, Einsatz und Bericht sind unterschiedliche Entitaeten. visits: id, tenant_id, patient_id, employee_id, planned_start, actual_start, actual_end, status. Geplanten und tatsaechlichen Mitarbeiter sowie Zeitpunkte unterscheiden; Vertretung beruecksichtigen. Einsaetze dienen der Zuordnung von Berichten, Taetigkeiten und spaeter der Abrechnung. Korrekturen nachvollziehbar dokumentieren.

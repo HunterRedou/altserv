@@ -1,0 +1,4 @@
+PUNKT 09 - Pflegeleistungen und Brandenburg-Katalog
+=================================================================
+
+Taetigkeit (was tatsaechlich getan wurde) von abrechenbarer Leistung unterscheiden. Tabellen: service_catalogs, service_definitions, tenant_service_contracts, activities, activity_service_rules. Katalog- und Vertragsversionen mit valid_from/valid_until. SGB XI und SGB V unterscheiden; keine erfundenen oder bundesweit als einheitlich angenommenen LK-Codes verwenden. Brandenburg-spezifische Vereinbarungen und gueltige Kassenvertraege fachlich pruefen. Historische Berichte behalten den damaligen Leistungsstand.

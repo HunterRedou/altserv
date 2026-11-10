@@ -1,0 +1,4 @@
+PUNKT 10 - Suchmaschinenfunktion
+=================================================================
+
+Zwei Suchsysteme: 1) Leistungen: PostgreSQL ILIKE, spaeter pg_trgm, Indizes, Synonyme, begrenzte Treffer und Relevanzsortierung. 2) Patienten: geschuetzter Suchindex fuer verschluesselte Namen, danach Berechtigung pruefen und nur erlaubte Treffer entschluesseln. Keine Hinweise auf fremde Patienten geben. Suchanfragen begrenzen und sensible Suchbegriffe nicht loggen. Frontend spaeter mit Debounce.

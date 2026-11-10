@@ -1,0 +1,4 @@
+PUNKT 06 - Authentifizierung und Sessions
+=================================================================
+
+Browser-Login mit serverseitigen Sessions. Passwortpruefung ueber Argon2id mit individuellem zufaelligem Salt. Kryptografisch zufaelliges Session-Token erstellen; nur SHA-256-Hash des hochentropischen Tokens in sessions speichern. Cookie: __Host-session, Secure, HttpOnly, Path=/, SameSite=Lax oder Strict je nach UX. Session-Rotation, Ablauf, Widerruf, Logout, Login-Rate-Limits, CSRF-Schutz und MFA fuer privilegierte Konten. Ressource: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html

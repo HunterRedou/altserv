@@ -1,2 +1,3 @@
--- name: GetUser :many
-SELECT * FROM users;
+-- name: ListUsersByTenant :many
+SELECT * FROM users
+WHERE tenant_id = $1;

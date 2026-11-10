@@ -1,0 +1,4 @@
+PUNKT 24 - Buecher und Lernressourcen
+=================================================================
+
+Go-Webentwicklung: Let's Go (Alex Edwards) https://lets-go.alexedwards.net/ ; API-Entwicklung: Let's Go Further https://lets-go-further.alexedwards.net/ ; Datenarchitektur: Designing Data-Intensive Applications (Martin Kleppmann) https://dataintensive.net/ ; Sicherheit: Web Application Security (Andrew Hoffman). Dokumentation: https://go.dev/doc/ ; https://docs.sqlc.dev/ ; https://www.postgresql.org/docs/ ; https://cheatsheetseries.owasp.org/ ; https://owasp.org/www-project-application-security-verification-standard/ ; https://use-the-index-luke.com/ ; https://eur-lex.europa.eu/eli/reg/2016/679/oj

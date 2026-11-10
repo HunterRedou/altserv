@@ -1,2 +1,2 @@
--- name: Reset :exec 
-DELETE FROM users;
+-- name: Reset :exec
+TRUNCATE tenants CASCADE;

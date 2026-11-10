@@ -1,0 +1,4 @@
+PUNKT 16 - PostgreSQL, sqlc und Migrationen
+=================================================================
+
+db/migrations mit versionierten up/down-SQL-Dateien; db/queries mit sqlc-Abfragen; db/seeds nur fuer synthetische Entwicklungsdaten. PostgreSQL speichert, Migrationen aendern Schema, sqlc generiert typisierte Go-Methoden, pgx verbindet Go und PostgreSQL. Separate DB-Rollen fuer App und Migration, kein Superuser/BYPASSRLS fuer API. Parametrisierte Queries, Constraints, zusammengesetzte Fremdschluessel, Indizes, TLS, verschluesselte Backups, Restore-Tests. Soft Delete, Archivierung, Deaktivierung und echte Loeschung je nach Rechtsgrund unterscheiden. Ressourcen: https://docs.sqlc.dev/ und https://www.postgresql.org/docs/current/

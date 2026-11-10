@@ -1,0 +1,4 @@
+PUNKT 13 - Pflegeberichte und Freigaben
+=================================================================
+
+reports: id, tenant_id, visit_id, patient_id, employee_id, status, note_enc, created_at, submitted_at, approved_at, approved_by. report_activities: id, tenant_id, report_id, activity_id, quantity, performed_at. Status: draft -> submitted -> approved -> ready_for_billing; Rueckgabe und Korrektur gesondert modellieren. Nach Einreichung keine stille Aenderung. Bericht, Taetigkeiten, Status und Audit-Ereignis atomar in einer Transaktion schreiben. Optimistic Locking und konkurrierende Bearbeitung testen.

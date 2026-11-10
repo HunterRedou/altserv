@@ -1,0 +1,4 @@
+PUNKT 02 - Grundlegende Architekturentscheidungen
+=================================================================
+
+Modularer Monolith: ein Go-Backend mit klaren Fachmodulen. REST/HTTPS fuer Berichte, Suche, Freigaben und Exporte. PostgreSQL fuer dauerhafte Speicherung. Zunaechst keine Microservices, Kafka oder Kubernetes. Ausfallsicherheit durch Timeouts, Context-Abbruch, Connection-Pooling, Transaktionen, idempotente kritische Operationen, Health-Checks, Backups und Restore-Tests. Architekturentscheidungen schriftlich begruenden.

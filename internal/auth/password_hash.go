@@ -5,18 +5,18 @@ import (
 )
 
 // HashPassword
-func HashPassword(password string) (string, error){
+func HashPassword(password string) (string, error) {
 	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
-	if err != nil{
+	if err != nil {
 		return "", err
 	}
 	return hash, nil
 }
 
-//CheckHash
+// CheckHash
 func CheckHash(password, hash string) (bool, error) {
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
-	if err != nil{
+	if err != nil {
 		return false, err
 	}
 	return match, nil

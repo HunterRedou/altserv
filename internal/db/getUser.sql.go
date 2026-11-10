@@ -7,14 +7,17 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
-const getUser = `-- name: GetUser :many
-SELECT id, created_at, updated_at, name, is_admin, is_teamhead, hashed_password, email, firm_id FROM users
+const listUsersByTenant = `-- name: ListUsersByTenant :many
+SELECT id, created_at, updated_at, name, hashed_password, email, tenant_id, role FROM users
+WHERE tenant_id = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, getUser)
+func (q *Queries) ListUsersByTenant(ctx context.Context, tenantID uuid.UUID) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersByTenant, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -27,11 +30,10 @@ func (q *Queries) GetUser(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Name,
-			&i.IsAdmin,
-			&i.IsTeamhead,
 			&i.HashedPassword,
 			&i.Email,
-			&i.FirmID,
+			&i.TenantID,
+			&i.Role,
 		); err != nil {
 			return nil, err
 		}

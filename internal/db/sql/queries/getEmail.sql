@@ -1,5 +1,5 @@
 -- name: GetByEmail :one
 SELECT * FROM users
-INNER JOIN firms
-  ON firms.id = users.firm_id
+INNER JOIN tenants
+  ON tenants.id = users.tenant_id
 WHERE users.email = $1;
