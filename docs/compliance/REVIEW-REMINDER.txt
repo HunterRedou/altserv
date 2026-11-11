@@ -1,0 +1,26 @@
+PROFESSIONAL REVIEW - OPEN ITEM
+===============================
+
+Status: NOT DONE. The review record is blank.
+Owner: to be assigned.
+Target: before the first production tenant.
+
+Why this matters:
+- The compliance documents are drafts.
+- No data-protection lawyer has signed the legal bases, DPIA, retention or
+  deletion rules.
+- No billing expert has signed the service codes, payer procedure or format.
+- No security lead has signed MFA, break-glass, audit evidence or recovery.
+
+Do this:
+1. Open docs/compliance/review-packet.md.
+2. Give it to a data-protection lawyer and a billing expert.
+3. Record each decision in docs/compliance/review-record.md.
+4. Do not start production while a gate in the review record is open.
+
+Do not treat a checked box as approval.
+
+Related files:
+- docs/compliance/review-packet.md
+- docs/compliance/review-record.md
+- docs/compliance/README.md

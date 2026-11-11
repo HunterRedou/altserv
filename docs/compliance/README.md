@@ -27,6 +27,7 @@ Review documents:
 | --- | --- |
 | `review-packet.md` | Focused decisions for the data-protection lawyer, billing expert and security lead. |
 | `review-record.md` | Signed decision log and gate status. Blank until the review is complete. |
+| `REVIEW-REMINDER.txt` | Short reminder that the professional review is still open. |
 
 Technical procedures are separate:
 

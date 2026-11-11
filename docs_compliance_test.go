@@ -28,6 +28,7 @@ func TestComplianceDocumentation(t *testing.T) {
 		"billing-requirements.md",
 		"review-packet.md",
 		"review-record.md",
+		"REVIEW-REMINDER.txt",
 	}
 
 	for _, name := range required {
@@ -54,11 +55,22 @@ func TestComplianceDocumentation(t *testing.T) {
 		t.Fatalf("read review packet: %v", err)
 	}
 	for _, name := range required {
-		if name == "README.md" || name == "review-packet.md" || name == "review-record.md" {
+		if name == "README.md" || name == "review-packet.md" ||
+			name == "review-record.md" || name == "REVIEW-REMINDER.txt" {
 			continue
 		}
 		if !strings.Contains(string(packet), name) {
 			t.Errorf("review-packet.md does not mention policy %s", name)
+		}
+	}
+
+	reminder, err := os.ReadFile(filepath.Join(complianceDir, "REVIEW-REMINDER.txt"))
+	if err != nil {
+		t.Fatalf("read review reminder: %v", err)
+	}
+	for _, want := range []string{"NOT DONE", "review-packet.md", "review-record.md"} {
+		if !strings.Contains(string(reminder), want) {
+			t.Errorf("REVIEW-REMINDER.txt does not mention %q", want)
 		}
 	}
 
