@@ -41,7 +41,7 @@ is not legal advice.
 | Break-glass grant | Revoke, not delete | Implemented | Tenant-bound and kept as decision evidence. A grant cascades away with its patient or tenant. |
 | Audit event | Not deletable | Append-only triggers and revoked privileges | Tenant deletion cascades audit rows. Audit metadata never contains patient names, free-text reasons, notes, legal-basis text or health data. |
 | User | No delete API | Not implemented | Disable and revoke sessions instead. Records reference the user with `RESTRICT`. |
-| Tenant | Database query only | `DeleteTenant` exists | Not exposed as an API. Used on a failed USt-IdNr check. Fails once the tenant has audit events. Tenant termination is still a controlled procedure. |
+| Tenant | Controlled procedure | `terminate_tenant()` function | Not exposed as an API. Removes audit rows inside a privileged function, then deletes in dependency order. Used for termination; `DeleteTenant` remains for a failed USt-IdNr check. |
 | Backup | Backup product expiry | Operator procedure | See `backup-policy.md`. |
 
 ## Patient deletion procedure
@@ -103,12 +103,13 @@ query relies on cascades. Because some edges are `RESTRICT`, a tenant with
 reports, visits, activities or billing runs may fail to delete, or may delete in
 an unexpected order.
 
-There is a second blocker: `audit_events` has a `BEFORE DELETE` trigger that
-raises `audit_events is append-only`. The tenant foreign key is
-`ON DELETE CASCADE`, so the cascade tries to delete the audit rows and the
-trigger aborts the whole statement. A tenant with any audit event therefore
-cannot be deleted with `DELETE FROM tenants`. This was confirmed on a scratch
-database.
+The historical blocker was the `audit_events` append-only trigger: deleting a
+tenant cascades to `audit_events`, and the trigger aborted the whole statement.
+Migration 025 resolves it. The `terminate_tenant(tenant_id)` function is
+`SECURITY DEFINER`: it sets `app.allow_audit_delete` for its own transaction,
+removes the audit rows and the care data in dependency order, and then deletes
+the tenant. The trigger still blocks every ordinary delete.
+
 
 A controlled termination must:
 

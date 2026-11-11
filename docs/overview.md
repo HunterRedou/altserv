@@ -744,7 +744,9 @@ See `docs/decisions/ADR-022-retention-deletion.md`.
 | Go backend, PostgreSQL, sqlc, migrations | Complete |
 | Session authentication, CSRF, rate limit | Complete |
 | Step 2: MFA, password reset, user disable, session purge | Complete |
-| Step 3: break-glass access for `platform_admin` | Complete |\n| Step 4: retention review and patient deletion | Complete |
+| Step 3: break-glass access for `platform_admin` | Complete |
+| Step 4: retention review and patient deletion | Complete |
+| Step 5: tenant termination | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -791,7 +793,7 @@ These are real gaps. They are not open design questions.
 1. No tenant-wide break-glass grant and no support UI. One grant covers one
    named patient.
 2. No email delivery for password reset or MFA changes.
-3. Tenant termination still fails once the tenant has audit events. Step 5 must address this.
+3. Tenant termination is now a controlled procedure via `terminate_tenant()`. Audit evidence must be exported first if the contract requires it.
 4. Tenant deletion fails once the tenant has audit events.
 5. No external append-only audit sink. A superuser can disable the triggers.
 6. No shipped PITR product and no automated PITR drill.
@@ -813,8 +815,8 @@ step 2 are complete.
    approval.
 2. **Implement retention and deletion.** Add a scheduled job, a patient
    deletion procedure with a four-eyes check, and a deletion register.
-3. **Fix tenant termination.** Export the audit trail or use a controlled
-   procedure. Test it on a staging copy with the same schema.
+3. **Tenant termination.** Implemented via `terminate_tenant()`. Export the
+   audit trail first if the contract requires evidence to survive.
 4. **Prove recovery.** Select a PITR product. Run a quarterly PITR drill and
    record the result. Test the backup key recovery.
 5. **Add an external append-only audit sink.** Keep audit evidence independent
@@ -834,7 +836,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-021. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-023. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |

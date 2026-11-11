@@ -117,7 +117,21 @@ can survive up to 14 days in a backup. Document this in the privacy notice.
 - Record each deletion run: date, scope, row counts, operator, reason.
 - Do not record patient names in the deletion log.
 - Review the schedule at least annually and after a legal change.
-- Test one deletion in a staging copy before running it in production.\n\n## Retention review job\n\nThe scheduled job runs `retention_review_candidates(NULL::uuid)` once at startup\nand then every `RETENTION_REVIEW_INTERVAL` (default 24h, minimum 1h, maximum\n7d). The function is `SECURITY DEFINER`. It writes one `retention.reviewed`\naudit event per tenant that has a confirmed policy, and it returns candidate\ncounts only. It never creates a deletion request and never deletes data. The\njob metrics are `altserv_retention_reviews_total` and\n`altserv_retention_review_candidates_total`.\n\nThe chef API `POST /api/retention/review` is scoped to the session tenant and\ncalls `retention_review_candidates($1::uuid)`. It returns counts only and never\nnames a patient.
+- Test one deletion in a staging copy before running it in production.
+
+## Retention review job
+
+The scheduled job runs `retention_review_candidates(NULL::uuid)` once at startup
+and then every `RETENTION_REVIEW_INTERVAL` (default 24h, minimum 1h, maximum
+7d). The function is `SECURITY DEFINER`. It writes one `retention.reviewed`
+audit event per tenant that has a confirmed policy, and it returns candidate
+counts only. It never creates a deletion request and never deletes data. The
+job metrics are `altserv_retention_reviews_total` and
+`altserv_retention_review_candidates_total`.
+
+The chef API `POST /api/retention/review` is scoped to the session tenant and
+calls `retention_review_candidates($1::uuid)`. It returns counts only and never
+names a patient.
 
 ## Open questions
 

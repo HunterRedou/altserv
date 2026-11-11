@@ -102,6 +102,20 @@ report or billing transaction.
 - The application role needs `DELETE` on `break_glass_grants` so a patient
   deletion can cascade. Migration 024 grants it.
 
+## Tenant termination after deploy
+
+- Migration `internal/db/sql/schema/025_tenant_termination.sql` adds the
+  `terminate_tenant(tenant_id)` function and relaxes the audit trigger so a
+  DELETE is allowed only when `app.allow_audit_delete = 'true'`.
+- Termination is an operator procedure, not an API. Run
+  `SELECT terminate_tenant('<tenant uuid>');` as the migration role or any
+  role with `EXECUTE` on the function.
+- Export the tenant's audit trail first if the contract requires evidence to
+  survive. The function removes the audit rows.
+- Back up before terminating. A terminated tenant cannot be restored from the
+  live database; restore from backup if needed.
+- The append-only trigger still blocks ordinary deletes from `audit_events`.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz
