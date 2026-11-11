@@ -21,6 +21,13 @@ folder as a legal approval.
 | `backup-policy.md` | Backup types, encryption, retention, restore drills, RPO/RTO. | Operator |
 | `billing-requirements.md` | Billing law, workflow, approval, export, transmission, review. | Billing expert and tenant |
 
+Review documents:
+
+| File | Purpose |
+| --- | --- |
+| `review-packet.md` | Focused decisions for the data-protection lawyer, billing expert and security lead. |
+| `review-record.md` | Signed decision log and gate status. Blank until the review is complete. |
+
 Technical procedures are separate:
 
 - `../runbooks/incident-response.md`
@@ -125,6 +132,8 @@ These are real gaps in the current implementation, not open design questions:
 | Next review | Before the first production tenant |
 | Review trigger | New data category, role, integration, subprocessor, hosting region, legal change or breach |
 | Approval | Data protection lead, legal counsel, billing expert, management |
+| Review packet | `review-packet.md` |
+| Review record | `review-record.md` |
 
 ## Review record
 
