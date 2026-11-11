@@ -17,9 +17,11 @@ import (
 	"github.com/HunterRedou/altserv/internal/assignments"
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
+	"github.com/HunterRedou/altserv/internal/billing"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/patients"
+	"github.com/HunterRedou/altserv/internal/reports"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
 	"github.com/google/uuid"
@@ -313,6 +315,8 @@ func newSessionTestAPI(t *testing.T, conn *sql.DB) (http.Handler, *db.Queries, *
 	activityService := activities.NewService(activities.NewRepository(cipher), catalogRepository, recorder, assignmentService)
 	templateService := templates.NewService(templates.NewRepository(), catalogRepository, recorder, assignmentService)
 	visitService := visits.NewService(visits.NewRepository(), recorder, assignmentService)
+	reportService := reports.NewService(reports.NewRepository(cipher), recorder, assignmentService)
+	billingService := billing.NewService(billing.NewRepository(), recorder)
 	cfg := &apiConfig{
 		db:                queries,
 		dbConn:            conn,
@@ -324,6 +328,8 @@ func newSessionTestAPI(t *testing.T, conn *sql.DB) (http.Handler, *db.Queries, *
 		activityService:   activityService,
 		templateService:   templateService,
 		visitService:      visitService,
+		reportService:     reportService,
+		billingService:    billingService,
 		tenantRunner: func(ctx context.Context, tenantID uuid.UUID, fn func(*db.Queries) error) error {
 			return db.WithTenantTx(ctx, tx, tenantID, fn)
 		},

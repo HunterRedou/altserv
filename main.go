@@ -13,10 +13,12 @@ import (
 	"github.com/HunterRedou/altserv/internal/activities"
 	"github.com/HunterRedou/altserv/internal/assignments"
 	"github.com/HunterRedou/altserv/internal/audit"
+	"github.com/HunterRedou/altserv/internal/billing"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/config"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/patients"
+	"github.com/HunterRedou/altserv/internal/reports"
 	"github.com/HunterRedou/altserv/internal/server"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
@@ -39,6 +41,8 @@ type apiConfig struct {
 	activityService   *activities.Service
 	templateService   *templates.Service
 	visitService      *visits.Service
+	reportService     *reports.Service
+	billingService    *billing.Service
 	loginLimiter      *loginRateLimiter
 }
 
@@ -76,6 +80,8 @@ func main() {
 	activityService := activities.NewService(activities.NewRepository(patientCipher), catalogRepository, auditRecorder, assignmentService)
 	templateService := templates.NewService(templates.NewRepository(), catalogRepository, auditRecorder, assignmentService)
 	visitService := visits.NewService(visits.NewRepository(), auditRecorder, assignmentService)
+	reportService := reports.NewService(reports.NewRepository(patientCipher), auditRecorder, assignmentService)
+	billingService := billing.NewService(billing.NewRepository(), auditRecorder)
 
 	apiCfg := apiConfig{
 		db:                db.New(dbConn),
@@ -89,6 +95,8 @@ func main() {
 		activityService:   activityService,
 		templateService:   templateService,
 		visitService:      visitService,
+		reportService:     reportService,
+		billingService:    billingService,
 		loginLimiter:      newLoginRateLimiter(10, time.Minute),
 	}
 

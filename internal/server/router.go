@@ -53,6 +53,29 @@ type Handlers struct {
 	VisitCancel        http.HandlerFunc
 	VisitCorrect       http.HandlerFunc
 
+	ReportCreate          http.HandlerFunc
+	ReportListByVisit     http.HandlerFunc
+	ReportListByPatient   http.HandlerFunc
+	ReportGet             http.HandlerFunc
+	ReportUpdate          http.HandlerFunc
+	ReportSubmit          http.HandlerFunc
+	ReportApprove         http.HandlerFunc
+	ReportReturn          http.HandlerFunc
+	ReportReadyForBilling http.HandlerFunc
+	ReportTransitions     http.HandlerFunc
+
+	BillingGenerate     http.HandlerFunc
+	BillingGetActive    http.HandlerFunc
+	BillingListByReport http.HandlerFunc
+	BillingRunGet       http.HandlerFunc
+	BillingApprove      http.HandlerFunc
+	BillingVoid         http.HandlerFunc
+	BillingExportCSV    http.HandlerFunc
+	BillingExportPDF    http.HandlerFunc
+	BillingRuleList     http.HandlerFunc
+	BillingRuleCreate   http.HandlerFunc
+	BillingTransmission http.HandlerFunc
+
 	Auth      func(http.Handler) http.Handler
 	CSRF      func(http.Handler) http.Handler
 	RequestID func(http.Handler) http.Handler
@@ -113,6 +136,27 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteCompleteVisit, protected(h.VisitComplete))
 	mux.Handle(RouteCancelVisit, protected(h.VisitCancel))
 	mux.Handle(RouteCorrectVisit, protected(h.VisitCorrect))
+	mux.Handle(RouteVisitReports, protected(h.ReportListByVisit))
+	mux.Handle(RouteCreateReport, protected(h.ReportCreate))
+	mux.Handle(RoutePatientReports, protected(h.ReportListByPatient))
+	mux.Handle(RouteReport, protected(h.ReportGet))
+	mux.Handle(RouteUpdateReport, protected(h.ReportUpdate))
+	mux.Handle(RouteSubmitReport, protected(h.ReportSubmit))
+	mux.Handle(RouteApproveReport, protected(h.ReportApprove))
+	mux.Handle(RouteReturnReport, protected(h.ReportReturn))
+	mux.Handle(RouteReadyForBillingReport, protected(h.ReportReadyForBilling))
+	mux.Handle(RouteReportTransitions, protected(h.ReportTransitions))
+	mux.Handle(RouteReportBilling, protected(h.BillingGetActive))
+	mux.Handle(RouteGenerateBilling, protected(h.BillingGenerate))
+	mux.Handle(RouteReportBillingRuns, protected(h.BillingListByReport))
+	mux.Handle(RouteBillingRun, protected(h.BillingRunGet))
+	mux.Handle(RouteApproveBillingRun, protected(h.BillingApprove))
+	mux.Handle(RouteVoidBillingRun, protected(h.BillingVoid))
+	mux.Handle(RouteExportBillingCSV, protected(h.BillingExportCSV))
+	mux.Handle(RouteExportBillingPDF, protected(h.BillingExportPDF))
+	mux.Handle(RouteBillingRules, protected(h.BillingRuleList))
+	mux.Handle(RouteCreateBillingRule, protected(h.BillingRuleCreate))
+	mux.Handle(RouteBillingTransmit, protected(h.BillingTransmission))
 
 	var handler http.Handler = mux
 	if h.Global != nil {

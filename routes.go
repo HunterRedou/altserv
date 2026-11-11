@@ -6,8 +6,10 @@ import (
 
 	"github.com/HunterRedou/altserv/internal/activities"
 	"github.com/HunterRedou/altserv/internal/assignments"
+	"github.com/HunterRedou/altserv/internal/billing"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/patients"
+	"github.com/HunterRedou/altserv/internal/reports"
 	"github.com/HunterRedou/altserv/internal/server"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
@@ -22,6 +24,8 @@ func (cfg *apiConfig) routes() http.Handler {
 	activityHandler := cfg.activityHandler()
 	templateHandler := cfg.templateHandler()
 	visitHandler := cfg.visitHandler()
+	reportHandler := cfg.reportHandler()
+	billingHandler := cfg.billingHandler()
 
 	return server.NewRouter(server.Handlers{
 		App:                     cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))),
@@ -66,6 +70,27 @@ func (cfg *apiConfig) routes() http.Handler {
 		VisitComplete:           visitHandler.Complete,
 		VisitCancel:             visitHandler.Cancel,
 		VisitCorrect:            visitHandler.Correct,
+		ReportCreate:            reportHandler.Create,
+		ReportListByVisit:       reportHandler.ListByVisit,
+		ReportListByPatient:     reportHandler.ListByPatient,
+		ReportGet:               reportHandler.Get,
+		ReportUpdate:            reportHandler.Update,
+		ReportSubmit:            reportHandler.Submit,
+		ReportApprove:           reportHandler.Approve,
+		ReportReturn:            reportHandler.Return,
+		ReportReadyForBilling:   reportHandler.ReadyForBilling,
+		ReportTransitions:       reportHandler.ListTransitions,
+		BillingGenerate:         billingHandler.Generate,
+		BillingGetActive:        billingHandler.GetActive,
+		BillingListByReport:     billingHandler.ListByReport,
+		BillingRunGet:           billingHandler.Get,
+		BillingApprove:          billingHandler.Approve,
+		BillingVoid:             billingHandler.Void,
+		BillingExportCSV:        billingHandler.ExportCSV,
+		BillingExportPDF:        billingHandler.ExportPDF,
+		BillingRuleList:         billingHandler.ListRules,
+		BillingRuleCreate:       billingHandler.CreateRule,
+		BillingTransmission:     billingHandler.Transmission,
 		Auth:                    cfg.middlewareAuth,
 		CSRF:                    cfg.middlewareCSRF,
 		RequestID:               cfg.middlewareRequestID,
@@ -107,6 +132,14 @@ func (cfg *apiConfig) templateHandler() *templates.Handler {
 
 func (cfg *apiConfig) visitHandler() *visits.Handler {
 	return visits.NewHandler(cfg.visitService, cfg.withTenant, visitActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) reportHandler() *reports.Handler {
+	return reports.NewHandler(cfg.reportService, cfg.withTenant, reportActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) billingHandler() *billing.Handler {
+	return billing.NewHandler(cfg.billingService, cfg.withTenant, billingActorFromContext, requestIDFromContext)
 }
 
 func actorFromContext(ctx context.Context) (patients.Actor, bool) {
@@ -175,6 +208,30 @@ func visitActorFromContext(ctx context.Context) (visits.Actor, bool) {
 		return visits.Actor{}, false
 	}
 	return visits.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func reportActorFromContext(ctx context.Context) (reports.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return reports.Actor{}, false
+	}
+	return reports.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func billingActorFromContext(ctx context.Context) (billing.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return billing.Actor{}, false
+	}
+	return billing.Actor{
 		UserID:   user.ID,
 		TenantID: user.TenantID,
 		Role:     user.Role,

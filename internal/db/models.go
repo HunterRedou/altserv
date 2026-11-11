@@ -60,6 +60,65 @@ type AuditEvent struct {
 	Metadata    json.RawMessage
 }
 
+type BillingFinding struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	RunID      uuid.UUID
+	Severity   string
+	Code       string
+	Message    string
+	ActivityID uuid.NullUUID
+	CreatedAt  time.Time
+}
+
+type BillingLine struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	RunID               uuid.UUID
+	ReportActivityID    uuid.UUID
+	ActivityID          uuid.UUID
+	ServiceDefinitionID uuid.UUID
+	ContractID          uuid.UUID
+	Quantity            int32
+	PerformedAt         time.Time
+	ServiceCode         string
+	ServiceName         string
+	LegalArea           string
+	PayerName           string
+	ContractReference   string
+	SortOrder           int32
+	CreatedAt           time.Time
+}
+
+type BillingRule struct {
+	ID                         uuid.UUID
+	TenantID                   uuid.UUID
+	Kind                       string
+	ServiceDefinitionID        uuid.UUID
+	RelatedServiceDefinitionID uuid.UUID
+	LegalArea                  string
+	Description                string
+	ValidFrom                  time.Time
+	ValidUntil                 sql.NullTime
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+}
+
+type BillingRun struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	ReportID    uuid.UUID
+	Status      string
+	Version     int32
+	GeneratedBy uuid.UUID
+	GeneratedAt time.Time
+	ApprovedBy  uuid.NullUUID
+	ApprovedAt  sql.NullTime
+	VoidedBy    uuid.NullUUID
+	VoidedAt    sql.NullTime
+	UpdatedAt   time.Time
+}
+
 type Patient struct {
 	ID           uuid.UUID
 	TenantID     uuid.UUID
@@ -93,6 +152,48 @@ type PatientSearchToken struct {
 	TokenType  string
 	KeyVersion int32
 	CreatedAt  time.Time
+}
+
+type Report struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	VisitID        uuid.UUID
+	PatientID      uuid.UUID
+	EmployeeID     uuid.UUID
+	Status         string
+	NoteEnc        []byte
+	NoteKeyVersion sql.NullInt32
+	Version        int32
+	CreatedBy      uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	SubmittedAt    sql.NullTime
+	ApprovedAt     sql.NullTime
+	ApprovedBy     uuid.NullUUID
+}
+
+type ReportActivity struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	ReportID    uuid.UUID
+	ActivityID  uuid.UUID
+	Quantity    int32
+	PerformedAt time.Time
+	SortOrder   int32
+	CreatedAt   time.Time
+}
+
+type ReportTransition struct {
+	ID               uuid.UUID
+	TenantID         uuid.UUID
+	ReportID         uuid.UUID
+	FromStatus       string
+	ToStatus         string
+	Kind             string
+	ActorUserID      uuid.UUID
+	ReasonEnc        []byte
+	ReasonKeyVersion sql.NullInt32
+	CreatedAt        time.Time
 }
 
 type ServiceCatalog struct {
