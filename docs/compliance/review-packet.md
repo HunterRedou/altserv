@@ -83,9 +83,9 @@ A decision is not complete without a name and a date.
 
 | ID | Decision | Draft position | Reviewer decision | Conditions | Owner | Date |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| SE-01 | Is MFA required for `chef` and `platform_admin`? | Required before production. | | | | |
-| SE-02 | Are password reset and user disable required? | Required before production. | | | | |
-| SE-03 | Is a scheduled session purge required? | Required. The query exists, but no job runs it. | | | | |
+| SE-01 | Is MFA required for `chef` and `platform_admin`? | Implemented and required. The reviewer must confirm the scope and the recovery process. | | | | |
+| SE-02 | Are password reset and user disable required? | Implemented and required. The reviewer must confirm the out-of-band token handover. | | | | |
+| SE-03 | Is a scheduled session purge required? | Implemented. The purge runs at startup and on an interval. | | | | |
 | SE-04 | Is the break-glass policy acceptable? | Not implemented. Future access must be explicit, time-limited, read-only where possible and audited. | | | | |
 | SE-05 | Which audit evidence strategy is used? | Export, de-identify or external sink. Not decided. | | | | |
 | SE-06 | Is the recovery target acceptable? | No PITR product and no automated drill yet. | | | | |

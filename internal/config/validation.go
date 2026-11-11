@@ -17,6 +17,10 @@ const (
 	// maxSlowQueryThreshold keeps the sample meaningful. A larger value would
 	// hide statements that are already too slow.
 	maxSlowQueryThreshold = time.Minute
+	// minSessionPurgeInterval keeps the maintenance job from spinning.
+	minSessionPurgeInterval = time.Minute
+	// maxSessionPurgeInterval bounds how stale an expired session can remain.
+	maxSessionPurgeInterval = 24 * time.Hour
 )
 
 func (c Config) validate() error {
@@ -93,6 +97,25 @@ func (c Config) validate() error {
 	}
 	if bytes.Equal(c.PatientEncryptionKey, c.PatientSearchKey) {
 		return fmt.Errorf("PATIENT_SEARCH_KEY must differ from PATIENT_ENCRYPTION_KEY")
+	}
+
+	if len(c.MFAEncryptionKey) != 0 && len(c.MFAEncryptionKey) != 32 {
+		return fmt.Errorf("MFA_ENCRYPTION_KEY must be 32 bytes after base64 decoding, got %d", len(c.MFAEncryptionKey))
+	}
+	if c.MFAKeyVersion < 1 {
+		return fmt.Errorf("MFA_KEY_VERSION must be at least 1, got %d", c.MFAKeyVersion)
+	}
+	if len(c.MFAEncryptionKey) != 0 && bytes.Equal(c.MFAEncryptionKey, c.PatientEncryptionKey) {
+		return fmt.Errorf("MFA_ENCRYPTION_KEY must differ from PATIENT_ENCRYPTION_KEY")
+	}
+	if len(c.MFAEncryptionKey) != 0 && bytes.Equal(c.MFAEncryptionKey, c.PatientSearchKey) {
+		return fmt.Errorf("MFA_ENCRYPTION_KEY must differ from PATIENT_SEARCH_KEY")
+	}
+	if c.SessionPurgeInterval < minSessionPurgeInterval {
+		return fmt.Errorf("SESSION_PURGE_INTERVAL must be at least %s, got %s", minSessionPurgeInterval, c.SessionPurgeInterval)
+	}
+	if c.SessionPurgeInterval > maxSessionPurgeInterval {
+		return fmt.Errorf("SESSION_PURGE_INTERVAL must not exceed %s, got %s", maxSessionPurgeInterval, c.SessionPurgeInterval)
 	}
 
 	return nil

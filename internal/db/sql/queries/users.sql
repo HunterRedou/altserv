@@ -23,4 +23,5 @@ RETURNING *;
 -- name: CountChefsByTenant :one
 SELECT count(*) FROM users
 WHERE tenant_id = $1
-  AND role = 'chef';
+  AND role = 'chef'
+  AND disabled_at IS NULL;

@@ -13,6 +13,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/activities"
 	"github.com/HunterRedou/altserv/internal/assignments"
 	"github.com/HunterRedou/altserv/internal/audit"
+	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/billing"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/config"
@@ -29,25 +30,27 @@ import (
 )
 
 type apiConfig struct {
-	fileserverHits    atomic.Int32
-	db                *db.Queries
-	dbConn            *sql.DB
-	platform          string
-	sessionDuration   time.Duration
-	tenantRunner      tenantRunner
-	auditRecorder     audit.Recorder
-	patientService    *patients.Service
-	assignmentService *assignments.Service
-	catalogService    *catalog.Service
-	activityService   *activities.Service
-	templateService   *templates.Service
-	visitService      *visits.Service
-	reportService     *reports.Service
-	billingService    *billing.Service
-	loginLimiter      *loginRateLimiter
-	metrics           *observability.Registry
-	health            *observability.Health
-	metricsToken      string
+	fileserverHits       atomic.Int32
+	db                   *db.Queries
+	dbConn               *sql.DB
+	platform             string
+	sessionDuration      time.Duration
+	tenantRunner         tenantRunner
+	auditRecorder        audit.Recorder
+	patientService       *patients.Service
+	assignmentService    *assignments.Service
+	catalogService       *catalog.Service
+	activityService      *activities.Service
+	templateService      *templates.Service
+	visitService         *visits.Service
+	reportService        *reports.Service
+	billingService       *billing.Service
+	loginLimiter         *loginRateLimiter
+	passwordResetLimiter *loginRateLimiter
+	mfaBox               *auth.SecretBox
+	metrics              *observability.Registry
+	health               *observability.Health
+	metricsToken         string
 }
 
 func main() {
@@ -85,6 +88,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("patient search index: %v", err)
 	}
+	mfaKey := cfg.MFAEncryptionKey
+	if len(mfaKey) == 0 {
+		mfaKey = auth.DeriveMFAKey(cfg.PatientEncryptionKey)
+	}
+	mfaBox, err := auth.NewSecretBox(mfaKey, cfg.MFAKeyVersion)
+	if err != nil {
+		log.Fatalf("MFA encryption: %v", err)
+	}
+
 	auditRecorder := audit.SQLRecorder{}
 	assignmentService := assignments.NewService(assignments.NewRepository(), auditRecorder)
 	patientService := patients.NewServiceWithSearch(patients.NewRepository(patientCipher), auditRecorder, assignmentService, searchIndexer)
@@ -97,23 +109,25 @@ func main() {
 	billingService := billing.NewService(billing.NewRepository(), auditRecorder)
 
 	apiCfg := apiConfig{
-		db:                db.New(dbConn),
-		dbConn:            dbConn,
-		platform:          cfg.Platform,
-		sessionDuration:   cfg.SessionDuration,
-		auditRecorder:     auditRecorder,
-		patientService:    patientService,
-		assignmentService: assignmentService,
-		catalogService:    catalogService,
-		activityService:   activityService,
-		templateService:   templateService,
-		visitService:      visitService,
-		reportService:     reportService,
-		billingService:    billingService,
-		loginLimiter:      newLoginRateLimiter(10, time.Minute),
-		metrics:           metrics,
-		health:            health,
-		metricsToken:      cfg.MetricsToken,
+		db:                   db.New(dbConn),
+		dbConn:               dbConn,
+		platform:             cfg.Platform,
+		sessionDuration:      cfg.SessionDuration,
+		auditRecorder:        auditRecorder,
+		patientService:       patientService,
+		assignmentService:    assignmentService,
+		catalogService:       catalogService,
+		activityService:      activityService,
+		templateService:      templateService,
+		visitService:         visitService,
+		reportService:        reportService,
+		billingService:       billingService,
+		loginLimiter:         newLoginRateLimiter(10, time.Minute),
+		passwordResetLimiter: newLoginRateLimiter(5, time.Minute),
+		mfaBox:               mfaBox,
+		metrics:              metrics,
+		health:               health,
+		metricsToken:         cfg.MetricsToken,
 	}
 
 	// Pick up tenants that were still pending when the previous process stopped.
@@ -124,6 +138,7 @@ func main() {
 
 	metrics.WatchBackupMarker(ctx, cfg.BackupMarkerFile, time.Minute)
 	observability.NewSlowQueryWatcher(dbConn, metrics, cfg.SlowQueryThreshold, 30*time.Second).Run(ctx)
+	go apiCfg.runSessionPurge(ctx, cfg.SessionPurgeInterval)
 
 	srv := server.New(cfg.Addr(), apiCfg.routes())
 	log.Printf("Serving on %s", cfg.Addr())

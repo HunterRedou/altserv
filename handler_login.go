@@ -5,20 +5,17 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
-	"github.com/HunterRedou/altserv/internal/db"
 )
 
+// handlerLogin is step one of authentication. A privileged user who has
+// enrolled MFA receives a short-lived challenge instead of a session. A
+// privileged user who has not enrolled yet receives a restricted session that
+// can only reach the enrollment endpoints (doc 4, ADR-020).
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
-	}
-
-	type response struct {
-		User
-		CSRFToken string `json:"csrf_token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -43,68 +40,51 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.DisabledAt.Valid {
+		respondWithError(w, http.StatusForbidden, "Account is disabled", nil)
+		return
+	}
+
 	// Users of an unverified (or deleted) tenant must not log in.
 	if user.Status != "valid" {
 		respondWithError(w, http.StatusForbidden, "Tenant is not verified", nil)
 		return
 	}
 
-	token, err := auth.GenerateToken()
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create session", err)
-		return
+	identity := loginUser{
+		ID:        user.ID,
+		TenantID:  user.TenantID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
 	}
 
-	csrfToken, err := auth.GenerateToken()
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create session", err)
-		return
-	}
-
-	expiresAt := time.Now().Add(cfg.sessionTTL())
-	err = cfg.withTenant(r.Context(), user.TenantID, func(q *db.Queries) error {
-		if _, err := q.CreateSession(r.Context(), db.CreateSessionParams{
-			TokenHash: auth.HashToken(token),
-			UserID:    user.ID,
-			TenantID:  user.TenantID,
-			CsrfToken: csrfToken,
-			ExpiresAt: expiresAt,
-		}); err != nil {
-			return err
+	// A privileged account with MFA enabled must present the second factor
+	// before a session is created. No cookie is set on this response.
+	if mfaRequired(user.Role) && user.MfaEnabled {
+		challenge, err := cfg.newMFAChallenge(r.Context(), user.TenantID, user.ID, "login")
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't start MFA challenge", err)
+			return
 		}
-		return cfg.recordAudit(r.Context(), q, audit.Event{
-			TenantID:    user.TenantID,
-			ActorUserID: user.ID,
-			Action:      "auth.login",
-			EntityType:  "user",
-			EntityID:    user.ID,
-			RequestID:   requestIDFromContext(r.Context()),
+		respondWithJSON(w, http.StatusAccepted, struct {
+			MFARequired bool      `json:"mfa_required"`
+			Challenge   string    `json:"challenge"`
+			ExpiresAt   time.Time `json:"expires_at"`
+		}{
+			MFARequired: true,
+			Challenge:   challenge,
+			ExpiresAt:   time.Now().Add(mfaChallengeTTL),
 		})
-	})
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create session", err)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  expiresAt,
-	})
-
-	respondWithJSON(w, http.StatusOK, response{
-		User: User{
-			ID:        user.ID,
-			Email:     user.Email,
-			Role:      user.Role,
-			TenantID:  user.TenantID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-		},
-		CSRFToken: csrfToken,
-	})
+	// A privileged account without MFA gets a restricted session so it can
+	// enroll. middlewareAuth blocks every other route until enrollment ends.
+	enrollmentRequired := mfaRequired(user.Role) && !user.MfaEnabled
+	if err := cfg.issueSession(w, r, identity, "auth.login", enrollmentRequired, nil); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create session", err)
+	}
 }

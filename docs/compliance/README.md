@@ -50,6 +50,7 @@ Design decisions are in `../decisions/`. The most relevant are:
 - ADR-012: protected patient search
 - ADR-017: billing assistant
 - ADR-019: deployment and observability
+- ADR-020: authentication hardening
 
 ## Role summary
 
@@ -87,9 +88,10 @@ the contract.
 
 ### Security
 
-- [ ] MFA for `chef` and `platform_admin`, or a documented compensating control.
-- [ ] Password reset and user-disable procedure.
-- [ ] Session purge scheduled.
+- [x] MFA for `chef` and `platform_admin` is implemented. The operator must
+      still enrol every privileged account and store recovery codes safely.
+- [x] Password reset and user-disable actions are implemented.
+- [x] Session purge is scheduled at startup and on an interval.
 - [ ] Production secrets in a secret manager, not in `.env` on a server.
 - [ ] TLS termination and HSTS verified.
 - [ ] Backup encryption and restore drill verified.
@@ -113,16 +115,18 @@ the contract.
 
 These are real gaps in the current implementation, not open design questions:
 
-1. No MFA, password reset, user-disable action or break-glass access.
-2. No automated retention or deletion job, and no patient delete API.
-3. Tenant deletion relies on cascades and may fail because of `RESTRICT` edges
+1. No break-glass access for `platform_admin`.
+2. No email delivery for password reset or MFA changes. Reset tokens are handed
+   over out of band.
+3. No automated retention or deletion job, and no patient delete API.
+4. Tenant deletion relies on cascades and may fail because of `RESTRICT` edges
    and the append-only audit trigger.
-4. Expired sessions are not purged on a schedule.
 5. No external append-only audit sink. A superuser can disable the triggers.
 6. No automated PITR drill and no shipped PITR product.
 7. Billing transmission is deliberately `not_configured`.
 8. No one-click DSAR export.
-9. The Compose file is a template, not a production orchestrator.
+9. No shared rate-limit store for multi-instance deployments.
+10. The Compose file is a template, not a production orchestrator.
 
 ## Document control
 

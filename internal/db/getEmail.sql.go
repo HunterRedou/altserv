@@ -7,36 +7,42 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 const getByEmail = `-- name: GetByEmail :one
-SELECT users.id, users.created_at, users.updated_at, name, users.hashed_password, users.email, tenant_id, role, tenants.id, tenants.created_at, tenants.updated_at, tenants.email, ustid, streetname, plz, tenants.hashed_password, status FROM users
+SELECT users.id, users.created_at, users.updated_at, name, users.hashed_password, users.email, tenant_id, role, disabled_at, mfa_secret_enc, mfa_secret_key_version, mfa_enabled, mfa_enrolled_at, tenants.id, tenants.created_at, tenants.updated_at, tenants.email, ustid, streetname, plz, tenants.hashed_password, status FROM users
 INNER JOIN tenants
   ON tenants.id = users.tenant_id
 WHERE users.email = $1
 `
 
 type GetByEmailRow struct {
-	ID               uuid.UUID
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	Name             string
-	HashedPassword   string
-	Email            string
-	TenantID         uuid.UUID
-	Role             string
-	ID_2             uuid.UUID
-	CreatedAt_2      time.Time
-	UpdatedAt_2      time.Time
-	Email_2          string
-	Ustid            string
-	Streetname       string
-	Plz              string
-	HashedPassword_2 string
-	Status           string
+	ID                  uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Name                string
+	HashedPassword      string
+	Email               string
+	TenantID            uuid.UUID
+	Role                string
+	DisabledAt          sql.NullTime
+	MfaSecretEnc        []byte
+	MfaSecretKeyVersion sql.NullInt32
+	MfaEnabled          bool
+	MfaEnrolledAt       sql.NullTime
+	ID_2                uuid.UUID
+	CreatedAt_2         time.Time
+	UpdatedAt_2         time.Time
+	Email_2             string
+	Ustid               string
+	Streetname          string
+	Plz                 string
+	HashedPassword_2    string
+	Status              string
 }
 
 func (q *Queries) GetByEmail(ctx context.Context, email string) (GetByEmailRow, error) {
@@ -51,6 +57,11 @@ func (q *Queries) GetByEmail(ctx context.Context, email string) (GetByEmailRow, 
 		&i.Email,
 		&i.TenantID,
 		&i.Role,
+		&i.DisabledAt,
+		&i.MfaSecretEnc,
+		&i.MfaSecretKeyVersion,
+		&i.MfaEnabled,
+		&i.MfaEnrolledAt,
 		&i.ID_2,
 		&i.CreatedAt_2,
 		&i.UpdatedAt_2,

@@ -9,14 +9,15 @@ import (
 )
 
 const (
-	defaultPort               = "8080"
-	defaultSessionDuration    = 24 * time.Hour
-	defaultKeyVersion         = 1
-	defaultDBMaxOpenConns     = 20
-	defaultDBMaxIdleConns     = 5
-	defaultDBConnMaxLifetime  = 30 * time.Minute
-	defaultShutdownDrainDelay = 5 * time.Second
-	defaultSlowQueryThreshold = 1 * time.Second
+	defaultPort                 = "8080"
+	defaultSessionDuration      = 24 * time.Hour
+	defaultKeyVersion           = 1
+	defaultDBMaxOpenConns       = 20
+	defaultDBMaxIdleConns       = 5
+	defaultDBConnMaxLifetime    = 30 * time.Minute
+	defaultShutdownDrainDelay   = 5 * time.Second
+	defaultSlowQueryThreshold   = 1 * time.Second
+	defaultSessionPurgeInterval = time.Hour
 )
 
 // Config is the runtime configuration loaded from environment variables.
@@ -58,6 +59,15 @@ type Config struct {
 	// index. It must not be the same key as the AES key (doc 7/10).
 	PatientSearchKey        []byte
 	PatientSearchKeyVersion int
+
+	// MFAEncryptionKey encrypts TOTP seeds at rest. When it is empty the
+	// process derives a domain-separated key from PatientEncryptionKey.
+	MFAEncryptionKey []byte
+	MFAKeyVersion    int
+
+	// SessionPurgeInterval controls the background purge of expired and
+	// revoked sessions and expired authentication tokens.
+	SessionPurgeInterval time.Duration
 }
 
 // Load reads the environment, applies defaults and validates the result.
@@ -80,6 +90,8 @@ func Load() (Config, error) {
 		SlowQueryThreshold: defaultSlowQueryThreshold,
 
 		PatientSearchKeyVersion: defaultKeyVersion,
+		MFAKeyVersion:           defaultKeyVersion,
+		SessionPurgeInterval:    defaultSessionPurgeInterval,
 	}
 
 	if raw := os.Getenv("SESSION_DURATION"); raw != "" {
@@ -160,6 +172,30 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("PATIENT_SEARCH_KEY_VERSION must be a number: %w", err)
 		}
 		cfg.PatientSearchKeyVersion = version
+	}
+
+	if raw := os.Getenv("MFA_ENCRYPTION_KEY"); raw != "" {
+		key, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("MFA_ENCRYPTION_KEY must be base64: %w", err)
+		}
+		cfg.MFAEncryptionKey = key
+	}
+
+	if raw := os.Getenv("MFA_KEY_VERSION"); raw != "" {
+		version, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("MFA_KEY_VERSION must be a number: %w", err)
+		}
+		cfg.MFAKeyVersion = version
+	}
+
+	if raw := os.Getenv("SESSION_PURGE_INTERVAL"); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("SESSION_PURGE_INTERVAL: %w", err)
+		}
+		cfg.SessionPurgeInterval = duration
 	}
 
 	if err := cfg.validate(); err != nil {

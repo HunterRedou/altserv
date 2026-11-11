@@ -132,16 +132,15 @@ Do not delete a user who authored or approved care records. The foreign keys use
 `RESTRICT` on purpose. Instead:
 
 1. Revoke all sessions.
-2. Disable the account (set a locked password or an explicit disabled state, if
-   available; otherwise remove the ability to log in by rotating the password
-   hash to an unusable value).
+2. Disable the account with `POST /api/users/{id}/disable`. This sets
+   `disabled_at` and revokes every session.
 3. Remove or expire the patient assignments.
 4. Keep the audit trail and the authored care records.
 5. Delete the account only after the retention period and only if no record
    references it.
 
-There is no dedicated "disable user" API yet. This is a gap. A production
-process needs one.
+The disable action is audited. Enabling the account again does not restore any
+old session. The operator must document who approves a disable and an enable.
 
 ## Restriction instead of deletion
 
@@ -196,8 +195,6 @@ A deletion is complete only when:
 ## Gaps
 
 - No patient delete API or guided deletion procedure.
-- No scheduled session purge.
-- No "disable user" API.
 - Tenant deletion relies on cascades and may fail because of `RESTRICT` edges
   and the append-only audit trigger.
 - No automated deletion register.

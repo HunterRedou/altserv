@@ -59,7 +59,8 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT users.id, users.name, users.email, users.role, users.tenant_id, sessions.csrf_token
+SELECT users.id, users.name, users.email, users.role, users.tenant_id,
+       users.mfa_enabled, sessions.csrf_token
 FROM sessions
 JOIN users ON users.id = sessions.user_id
 JOIN tenants ON tenants.id = users.tenant_id
@@ -67,15 +68,17 @@ WHERE sessions.token_hash = $1
   AND sessions.revoked_at IS NULL
   AND sessions.expires_at > NOW()
   AND tenants.status = 'valid'
+  AND users.disabled_at IS NULL
 `
 
 type GetSessionUserRow struct {
-	ID        uuid.UUID
-	Name      string
-	Email     string
-	Role      string
-	TenantID  uuid.UUID
-	CsrfToken string
+	ID         uuid.UUID
+	Name       string
+	Email      string
+	Role       string
+	TenantID   uuid.UUID
+	MfaEnabled bool
+	CsrfToken  string
 }
 
 func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error) {
@@ -87,6 +90,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.Email,
 		&i.Role,
 		&i.TenantID,
+		&i.MfaEnabled,
 		&i.CsrfToken,
 	)
 	return i, err

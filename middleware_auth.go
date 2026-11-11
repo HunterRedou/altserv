@@ -32,12 +32,13 @@ const authUserKey contextKey = "auth_user"
 // authUser is the authenticated identity for one request.
 // TenantID always comes from the session, never from a client header.
 type authUser struct {
-	ID        uuid.UUID
-	Name      string
-	Email     string
-	Role      string
-	TenantID  uuid.UUID
-	CSRFToken string
+	ID         uuid.UUID
+	Name       string
+	Email      string
+	Role       string
+	TenantID   uuid.UUID
+	CSRFToken  string
+	MfaEnabled bool
 }
 
 // middlewareAuth resolves the session cookie into an authUser.
@@ -57,13 +58,22 @@ func (cfg *apiConfig) middlewareAuth(next http.Handler) http.Handler {
 		}
 
 		user := authUser{
-			ID:        row.ID,
-			Name:      row.Name,
-			Email:     row.Email,
-			Role:      row.Role,
-			TenantID:  row.TenantID,
-			CSRFToken: row.CsrfToken,
+			ID:         row.ID,
+			Name:       row.Name,
+			Email:      row.Email,
+			Role:       row.Role,
+			TenantID:   row.TenantID,
+			CSRFToken:  row.CsrfToken,
+			MfaEnabled: row.MfaEnabled,
 		}
+
+		// A privileged account without MFA may only reach the enrollment
+		// endpoints. This closes the window for a legacy or promoted account.
+		if mfaRequired(user.Role) && !user.MfaEnabled && !mfaAllowedWithoutEnrollment(r.URL.Path) {
+			respondWithError(w, http.StatusForbidden, "MFA enrollment required", nil)
+			return
+		}
+
 		ctx := context.WithValue(r.Context(), authUserKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

@@ -15,8 +15,8 @@ sentences use the active voice.
 
 The diagrams are ASCII. They render in any editor and in any Markdown viewer.
 
-The most recent feature deliverables are Points 13, 14 and 15. They are
-summarized in the project status.
+The most recent feature deliverables are Points 13, 14 and 15 plus the Step 2
+authentication hardening. They are summarized in the project status.
 
 ---
 
@@ -465,15 +465,85 @@ patient and employee data
   trigger blocks the cascade. This was confirmed on a scratch database.
 - `archived` is a status, not an access control. A chef can still read an
   archived patient. Employees lose access.
-- There is no patient delete API, no scheduled session purge and no
-  user-disable action.
+- There is no patient delete API and no automated retention job.
 - A `platform_admin` is stored with a tenant id. It must not belong to a tenant
   that holds patient data.
+- MFA, password reset, user disable and the scheduled session purge are
+  implemented. See the Step 2 section above.
 
 ### Status
 
 All Point 21 documents are drafts. They need professional data-protection and
 billing review before production. A checked box is not a legal approval.
+
+---
+
+## Authentication hardening (Step 2)
+
+### What it does
+
+Step 2 closes the authentication gaps in the access-control policy. It adds
+MFA, password reset, user disable and a scheduled session purge.
+
+`chef` and `platform_admin` must use a second factor. An `employee` does not.
+
+### Login flow
+
+```
+email + password
+       |
+       v
++----------------------+
+| role needs MFA?      |
++----+------------+----+
+     | no         | yes
+     v            v
+  session   +---------------------+
+            | MFA enrolled?       |
+            +----+-----------+----+
+                 | no        | yes
+                 v           v
+      restricted session   202 + challenge
+      (enroll only)            |
+                 |             v
+                 |      TOTP or recovery code
+                 |             |
+                 +-------------+--> session
+```
+
+Rules:
+
+- A challenge lives 5 minutes. It allows 5 attempts.
+- A challenge is consumed in the same transaction as the session.
+- A recovery code works one time.
+- A privileged account without MFA can only reach the enrollment endpoints.
+- A role change revokes the target user's sessions.
+- A disabled account cannot log in and loses every session.
+
+### Reset and purge
+
+```
+reset request --> hashed token (30 min, one use) --> new password
+                                                    |
+                                                    v
+                                            revoke all sessions
+```
+
+- The public reset request never shows whether an account exists.
+- A `chef` or `platform_admin` can issue a token for another user.
+- A `chef` cannot reset a `platform_admin`.
+- The purge deletes expired and revoked sessions, challenges and reset tokens.
+- The purge writes one audit event per tenant. The metric
+  `altserv_sessions_purged_total` counts the rows.
+
+### Limits
+
+- No email delivery. Tokens are handed over out of band.
+- No shared rate-limit store. The limit is per process.
+- No user-facing session list.
+- MFA does not replace a strong password policy.
+
+See `docs/decisions/ADR-020-authentication-hardening.md`.
 
 ---
 
@@ -485,6 +555,7 @@ billing review before production. A checked box is not a legal approval.
 | --- | --- |
 | Go backend, PostgreSQL, sqlc, migrations | Complete |
 | Session authentication, CSRF, rate limit | Complete |
+| Step 2: MFA, password reset, user disable, session purge | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -516,8 +587,9 @@ The following checks pass:
 - `go vet ./...` passes.
 - `go test ./...` passes.
 - `TEST_DB_URL=... go test -race ./...` passes.
-- Migration `internal/db/sql/schema/021_audit_hardening.sql` is applied to the
-  development and test databases. Goose version is 21.
+- Migrations `internal/db/sql/schema/021_audit_hardening.sql` and
+  `internal/db/sql/schema/022_auth_hardening.sql` are applied to the development
+  and test databases. Goose version is 22.
 - The deployment YAML and JSON files are valid.
 - `docker compose config` passes.
 - All compliance links and file references resolve.
@@ -526,16 +598,17 @@ The following checks pass:
 
 These are real gaps. They are not open design questions.
 
-1. No MFA, password reset, user-disable action or break-glass access.
-2. No automated retention or deletion job. No patient delete API.
-3. Tenant deletion fails once the tenant has audit events.
-4. Expired sessions are not purged on a schedule.
+1. No break-glass access for `platform_admin`.
+2. No email delivery for password reset or MFA changes.
+3. No automated retention or deletion job. No patient delete API.
+4. Tenant deletion fails once the tenant has audit events.
 5. No external append-only audit sink. A superuser can disable the triggers.
 6. No shipped PITR product and no automated PITR drill.
 7. Billing transmission is deliberately `not_configured`.
 8. No one-click data-subject access export.
 9. `platform_admin` is tenant-bound. There is no cross-tenant support API.
-10. The Compose file is a template, not a production orchestrator.
+10. No shared rate-limit store for multi-instance deployments.
+11. The Compose file is a template, not a production orchestrator.
 
 ---
 
@@ -547,8 +620,8 @@ step 2 are complete.
 1. **Professional review.** Give the Point 21 documents to a data-protection
    lawyer and a billing expert. Record the result. Do not treat the drafts as
    approval.
-2. **Close the authentication gaps.** Add MFA for `chef` and `platform_admin`,
-   a password reset flow, a user-disable action and a scheduled session purge.
+2. **Close the authentication gaps.** Complete: MFA for `chef` and
+   `platform_admin`, password reset, user disable and a scheduled session purge.
 3. **Design break-glass access.** Make it explicit, time-limited, read-only
    where possible, approved and audited. Do not add a hidden superuser path.
 4. **Implement retention and deletion.** Add a scheduled job, a patient
@@ -574,7 +647,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-019. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-020. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |

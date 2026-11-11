@@ -60,9 +60,10 @@ type Registry struct {
 	requests map[requestKey]uint64
 	duration map[histogramKey]*histogram
 
-	inFlight      atomic.Int64
-	loginFailures atomic.Uint64
-	jobErrors     map[string]uint64
+	inFlight       atomic.Int64
+	loginFailures  atomic.Uint64
+	sessionsPurged atomic.Uint64
+	jobErrors      map[string]uint64
 
 	backupAgeSeconds atomic.Int64
 	backupSet        atomic.Bool
@@ -101,6 +102,15 @@ func (r *Registry) IncLoginFailure() {
 		return
 	}
 	r.loginFailures.Add(1)
+}
+
+// IncSessionsPurged counts expired and revoked sessions removed by the
+// maintenance job.
+func (r *Registry) IncSessionsPurged(count int) {
+	if r == nil || count <= 0 {
+		return
+	}
+	r.sessionsPurged.Add(uint64(count))
 }
 
 // IncJobError counts a failed background job.
@@ -345,6 +355,10 @@ func (r *Registry) Render() string {
 	b.WriteString("# HELP altserv_login_failures_total Failed login attempts.\n")
 	b.WriteString("# TYPE altserv_login_failures_total counter\n")
 	fmt.Fprintf(&b, "altserv_login_failures_total %d\n", r.loginFailures.Load())
+
+	b.WriteString("# HELP altserv_sessions_purged_total Expired and revoked sessions removed by the maintenance job.\n")
+	b.WriteString("# TYPE altserv_sessions_purged_total counter\n")
+	fmt.Fprintf(&b, "altserv_sessions_purged_total %d\n", r.sessionsPurged.Load())
 
 	b.WriteString("# HELP altserv_job_errors_total Failed background jobs.\n")
 	b.WriteString("# TYPE altserv_job_errors_total counter\n")

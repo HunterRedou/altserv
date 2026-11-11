@@ -52,14 +52,24 @@ func (l *loginRateLimiter) allow(key string) bool {
 }
 
 func (cfg *apiConfig) middlewareLoginRateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return middlewareRateLimit(cfg.loginLimiter, "Too many login attempts", next)
+}
+
+// middlewarePasswordResetRateLimit protects the public reset endpoints from
+// account-enumeration sweeps and token spam.
+func (cfg *apiConfig) middlewarePasswordResetRateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return middlewareRateLimit(cfg.passwordResetLimiter, "Too many reset attempts", next)
+}
+
+func middlewareRateLimit(limiter *loginRateLimiter, message string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cfg.loginLimiter == nil {
+		if limiter == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !cfg.loginLimiter.allow(clientIP(r)) {
-			w.Header().Set("Retry-After", strconv.Itoa(int(cfg.loginLimiter.window.Seconds())))
-			respondWithError(w, http.StatusTooManyRequests, "Too many login attempts", nil)
+		if !limiter.allow(clientIP(r)) {
+			w.Header().Set("Retry-After", strconv.Itoa(int(limiter.window.Seconds())))
+			respondWithError(w, http.StatusTooManyRequests, message, nil)
 			return
 		}
 		next.ServeHTTP(w, r)

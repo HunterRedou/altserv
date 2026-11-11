@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, created_at, updated_at, name, hashed_password, email, tenant_id, role FROM users
+SELECT id, created_at, updated_at, name, hashed_password, email, tenant_id, role, disabled_at, mfa_secret_enc, mfa_secret_key_version, mfa_enabled, mfa_enrolled_at FROM users
 WHERE id = $1
   AND tenant_id = $2
 `
@@ -34,6 +34,11 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 		&i.Email,
 		&i.TenantID,
 		&i.Role,
+		&i.DisabledAt,
+		&i.MfaSecretEnc,
+		&i.MfaSecretKeyVersion,
+		&i.MfaEnabled,
+		&i.MfaEnrolledAt,
 	)
 	return i, err
 }

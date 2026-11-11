@@ -89,6 +89,8 @@ func TestCountersAndBackupAge(t *testing.T) {
 	registry := NewRegistry()
 	registry.IncLoginFailure()
 	registry.IncLoginFailure()
+	registry.IncSessionsPurged(3)
+	registry.IncSessionsPurged(2)
 	registry.IncJobError("tenant_verification")
 	registry.SetBackupAge(90 * time.Minute)
 	registry.IncBackupReadError()
@@ -96,6 +98,7 @@ func TestCountersAndBackupAge(t *testing.T) {
 	output := registry.Render()
 	for _, line := range []string{
 		"altserv_login_failures_total 2",
+		"altserv_sessions_purged_total 5",
 		`altserv_job_errors_total{job="tenant_verification"} 1`,
 		"altserv_backup_age_seconds 5400",
 		"altserv_backup_marker_read_errors_total 1",

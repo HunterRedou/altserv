@@ -119,6 +119,27 @@ type BillingRun struct {
 	UpdatedAt   time.Time
 }
 
+type MfaChallenge struct {
+	TokenHash  []byte
+	TenantID   uuid.UUID
+	UserID     uuid.UUID
+	Purpose    string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	Attempts   int32
+	ConsumedAt sql.NullTime
+}
+
+type PasswordResetToken struct {
+	TokenHash []byte
+	TenantID  uuid.UUID
+	UserID    uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    sql.NullTime
+	IssuedBy  uuid.NullUUID
+}
+
 type Patient struct {
 	ID           uuid.UUID
 	TenantID     uuid.UUID
@@ -280,14 +301,28 @@ type TenantServiceContract struct {
 }
 
 type User struct {
-	ID             uuid.UUID
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Name           string
-	HashedPassword string
-	Email          string
-	TenantID       uuid.UUID
-	Role           string
+	ID                  uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Name                string
+	HashedPassword      string
+	Email               string
+	TenantID            uuid.UUID
+	Role                string
+	DisabledAt          sql.NullTime
+	MfaSecretEnc        []byte
+	MfaSecretKeyVersion sql.NullInt32
+	MfaEnabled          bool
+	MfaEnrolledAt       sql.NullTime
+}
+
+type UserRecoveryCode struct {
+	ID        uuid.UUID
+	TenantID  uuid.UUID
+	UserID    uuid.UUID
+	CodeHash  []byte
+	CreatedAt time.Time
+	UsedAt    sql.NullTime
 }
 
 type Visit struct {

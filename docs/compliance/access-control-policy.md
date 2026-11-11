@@ -111,15 +111,65 @@ Implemented:
 - Session expiry, default 24 hours, configurable up to 30 days.
 - Logout revokes the session.
 - Unverified tenants cannot obtain a session.
+- Disabled accounts cannot log in and lose every session immediately.
+- Role changes revoke the target user's sessions.
+
+### Multi-factor authentication
+
+- MFA is required for `chef` and `platform_admin`. `employee` accounts may log
+  in without MFA; the enforcement point is the role, not the tenant.
+- The second factor is TOTP: SHA-1, 6 digits, 30-second step, plus or minus one
+  step. Recovery codes are an alternate second factor.
+- A privileged login with MFA enabled returns `202` and a challenge. No session
+  cookie is set until the second factor is accepted.
+- A privileged login without MFA returns a restricted session with
+  `mfa_enrollment_required: true`. Only `/api/me`, `/api/logout`,
+  `/api/mfa/enroll` and `/api/mfa/confirm` are reachable. Every other route
+  returns `403` until enrollment completes.
+- Challenges are stored as hashes, live 5 minutes, allow at most 5 attempts and
+  are consumed in the same transaction as the session.
+- Recovery codes are shown once, stored as SHA-256 hashes and are single use.
+  There are 10 codes. Regenerating them replaces the old set.
+- The TOTP seed is encrypted with AES-256-GCM. The associated data binds the
+  ciphertext to the key version, tenant and user. The MFA key is
+  `MFA_ENCRYPTION_KEY`, or an HMAC derivation of `PATIENT_ENCRYPTION_KEY` when
+  that variable is unset. The configuration rejects a direct reuse of the
+  patient encryption key.
+- Disabling MFA or replacing recovery codes requires the current password and a
+  valid second factor. Both actions are audited.
+
+### Password reset
+
+- A public request endpoint always answers `202` with the same message. It never
+  reveals whether the account exists.
+- Reset tokens are stored as hashes, live 30 minutes and are single use.
+- A confirmed reset changes the password, revokes every session for that user
+  and writes an audit event in one transaction.
+- A `chef` or `platform_admin` may issue a reset token for another user in the
+  same tenant. The token is returned to the issuer because no email delivery is
+  configured yet.
+- A `chef` may not reset a `platform_admin`, and no user may use the admin
+  endpoint for their own account.
+- The public reset endpoints have a separate rate limit of 5 attempts per minute
+  per source address.
+
+### Session purge
+
+- Expired and revoked sessions, expired challenges and expired reset tokens are
+  deleted by `purge_expired_auth_rows()`.
+- The function is `SECURITY DEFINER` and writes an `auth.sessions_purged` audit
+  event per affected tenant, so the count and the evidence commit together.
+- The purge runs at startup and then every `SESSION_PURGE_INTERVAL` (default
+  one hour). The metric `altserv_sessions_purged_total` counts removed rows.
 
 Not implemented, and required before production:
 
-- Multi-factor authentication, at least for `chef` and `platform_admin`.
-- A password reset flow with a single-use, expiring token.
 - Account lockout or a global login throttle that is not per process.
 - SSO or an identity provider for staff.
-- A "disable user" action.
-- A session list and "revoke all sessions" action for a user.
+- Email delivery for password reset and MFA changes. Tokens are handed over out
+  of band.
+- A user-facing session list. Sessions can be revoked in bulk by an
+  administrator, but a user cannot see or revoke a single session.
 - A shared rate-limit store for multi-instance deployments.
 
 Until these exist, the operator must compensate with a strong password policy,
@@ -190,7 +240,10 @@ The following actions are audited:
 - catalog, contract, activity, template, visit and report actions
 - report submit, approve, return and ready-for-billing
 - billing generate, approve, void, export and rule creation
-- user create and role change
+- user create, role change, disable and enable
+- MFA enrollment, MFA enabled, MFA disabled and recovery-code regeneration
+- password reset requested, issued and completed
+- session purge
 - audit log read
 - denied access
 
@@ -199,13 +252,17 @@ Entity ids are allowed.
 
 ## Gaps
 
-- No MFA.
-- No password reset.
-- No user-disable action.
 - No break-glass access.
 - No shared rate-limit store.
 - No automated access review.
 - No external append-only audit sink.
+- No email delivery for reset tokens or MFA changes.
+- No user-facing session list or single-session revoke.
+- The pre-tenant authentication lookups (login, session, MFA challenge and
+  reset token) use the privileged connection because the tenant is not known
+  yet. ADR-010 records this as a path to review separately. Before production,
+  replace it with a narrow least-privilege function, not a superuser or
+  `BYPASSRLS` role.
 - The audit log is readable by `chef` for the own tenant; it is not readable by
   `employee`.
 - `platform_admin` is tenant-bound and has no cross-tenant support API. It must
@@ -213,7 +270,6 @@ Entity ids are allowed.
 
 ## Open questions
 
-- Which roles need MFA at launch?
 - Who approves `platform_admin` access, and how often is it reviewed?
 - Is a tenant allowed to grant a support person temporary access, and under
   which contract clause?

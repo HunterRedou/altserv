@@ -163,8 +163,9 @@ After the measures, the main residual risks are:
   integration tests, code review, least privilege, monitoring and a fast
   incident response.
 - A compromised `chef` account can read all patients in its tenant. Mitigation:
-  strong authentication, rate limiting, session revocation and audit. MFA is
-  not implemented yet; this is a significant gap for a `chef` account.
+  MFA, strong authentication, rate limiting, session revocation and audit. The
+  residual risk is a stolen password plus a stolen second factor, or a leaked
+  MFA seed.
 - Free-text notes can contain excessive data. Mitigation: training and a
   documentation guideline. The application cannot enforce content.
 - Retention and deletion are manual. Mitigation: a documented procedure and a
@@ -203,7 +204,7 @@ Review this DPIA:
 - Which national DPIA list entry applies, if any?
 - Is a data protection officer required for the operator or the tenant?
 - Which retention period applies to care documentation in the tenant's context?
-- Is MFA required before a `chef` account may hold a full tenant?
+- Should MFA also cover `employee` accounts that can read patient data?
 - Which external append-only audit sink will be used?
 - Which subprocessors are contracted, and where are they located?
 - Is a works council agreement needed for the employee audit data?

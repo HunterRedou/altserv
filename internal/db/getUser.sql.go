@@ -12,7 +12,7 @@ import (
 )
 
 const listUsersByTenant = `-- name: ListUsersByTenant :many
-SELECT id, created_at, updated_at, name, hashed_password, email, tenant_id, role FROM users
+SELECT id, created_at, updated_at, name, hashed_password, email, tenant_id, role, disabled_at, mfa_secret_enc, mfa_secret_key_version, mfa_enabled, mfa_enrolled_at FROM users
 WHERE tenant_id = $1
 `
 
@@ -34,6 +34,11 @@ func (q *Queries) ListUsersByTenant(ctx context.Context, tenantID uuid.UUID) ([]
 			&i.Email,
 			&i.TenantID,
 			&i.Role,
+			&i.DisabledAt,
+			&i.MfaSecretEnc,
+			&i.MfaSecretKeyVersion,
+			&i.MfaEnabled,
+			&i.MfaEnrolledAt,
 		); err != nil {
 			return nil, err
 		}

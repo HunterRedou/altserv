@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -299,6 +301,15 @@ func TestSessionFlow(t *testing.T) {
 func newSessionTestAPI(t *testing.T, conn *sql.DB) (http.Handler, *db.Queries, *sql.Tx) {
 	t.Helper()
 
+	cfg, queries, tx := newSessionTestAPIConfig(t, conn)
+	return cfg.routes(), queries, tx
+}
+
+// newSessionTestAPIConfig exposes the apiConfig so a test can drive background
+// work such as the session purge or switch the platform to dev.
+func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Queries, *sql.Tx) {
+	t.Helper()
+
 	tx, queries := newTestTx(t, conn)
 	cipher, err := patients.NewCipher(bytes.Repeat([]byte{9}, 32), 1)
 	if err != nil {
@@ -317,10 +328,15 @@ func newSessionTestAPI(t *testing.T, conn *sql.DB) (http.Handler, *db.Queries, *
 	visitService := visits.NewService(visits.NewRepository(), recorder, assignmentService)
 	reportService := reports.NewService(reports.NewRepository(cipher), recorder, assignmentService)
 	billingService := billing.NewService(billing.NewRepository(), recorder)
+	mfaBox, err := auth.NewSecretBox(testMFAKey(), 1)
+	if err != nil {
+		t.Fatalf("NewSecretBox: %v", err)
+	}
 	cfg := &apiConfig{
 		db:                queries,
 		dbConn:            conn,
 		platform:          "test",
+		mfaBox:            mfaBox,
 		auditRecorder:     recorder,
 		patientService:    patients.NewServiceWithSearch(patients.NewRepository(cipher), recorder, assignmentService, searchIndexer),
 		assignmentService: assignmentService,
@@ -334,7 +350,7 @@ func newSessionTestAPI(t *testing.T, conn *sql.DB) (http.Handler, *db.Queries, *
 			return db.WithTenantTx(ctx, tx, tenantID, fn)
 		},
 	}
-	return cfg.routes(), queries, tx
+	return cfg, queries, tx
 }
 
 func createTenant(t *testing.T, queries *db.Queries, status string) db.Tenant {
@@ -362,7 +378,21 @@ func createTenant(t *testing.T, queries *db.Queries, status string) db.Tenant {
 	return tenant
 }
 
-func createUserWithPassword(t *testing.T, queries *db.Queries, tenantID uuid.UUID, email, password, role string) db.User {
+// testMFAKey returns the fixed key used by the test secret box.
+func testMFAKey() []byte {
+	return bytes.Repeat([]byte{7}, 32)
+}
+
+// testTOTPSecret derives a stable secret from the email so loginAs can finish
+// the second step without a shared mutable map.
+func testTOTPSecret(email string) string {
+	sum := sha256.Sum256([]byte("test-mfa|" + email))
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:20])
+}
+
+// createUserWithoutMFA creates an account but leaves MFA unenrolled. Tests use
+// it to exercise the enrollment and enforcement paths.
+func createUserWithoutMFA(t *testing.T, queries *db.Queries, tenantID uuid.UUID, email, password, role string) db.User {
 	t.Helper()
 
 	hashed, err := auth.HashPassword(password)
@@ -383,6 +413,37 @@ func createUserWithPassword(t *testing.T, queries *db.Queries, tenantID uuid.UUI
 	return user
 }
 
+// createUserWithPassword creates an active user. Privileged roles are enrolled
+// in MFA with the deterministic test secret so existing flows stay realistic.
+func createUserWithPassword(t *testing.T, queries *db.Queries, tenantID uuid.UUID, email, password, role string) db.User {
+	t.Helper()
+
+	user := createUserWithoutMFA(t, queries, tenantID, email, password, role)
+	if !mfaRequired(role) {
+		return user
+	}
+
+	box, err := auth.NewSecretBox(testMFAKey(), 1)
+	if err != nil {
+		t.Fatalf("NewSecretBox: %v", err)
+	}
+	secret := testTOTPSecret(email)
+	encrypted, err := box.Encrypt(secret, auth.MFAFieldAAD(tenantID, user.ID, 1))
+	if err != nil {
+		t.Fatalf("encrypt test MFA secret: %v", err)
+	}
+	user, err = queries.EnableUserMFA(context.Background(), db.EnableUserMFAParams{
+		ID:                  user.ID,
+		TenantID:            tenantID,
+		MfaSecretEnc:        encrypted,
+		MfaSecretKeyVersion: sql.NullInt32{Int32: 1, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("enable test MFA for %s: %v", email, err)
+	}
+	return user
+}
+
 type loginResult struct {
 	cookie *http.Cookie
 	csrf   string
@@ -393,6 +454,25 @@ func loginAs(t *testing.T, handler http.Handler, email, password string) loginRe
 
 	rec := doRequest(handler, http.MethodPost, "/api/login",
 		fmt.Sprintf(`{"email":%q,"password":%q}`, email, password), nil, "")
+
+	// A privileged account with MFA enabled answers with a challenge instead
+	// of a session. Finish the second step automatically for existing tests.
+	if rec.Code == http.StatusAccepted {
+		var challenge struct {
+			Challenge string `json:"challenge"`
+		}
+		decodeJSON(t, rec, &challenge)
+		if challenge.Challenge == "" {
+			t.Fatal("login response has no MFA challenge")
+		}
+		code, err := auth.TOTPCode(testTOTPSecret(email), time.Now())
+		if err != nil {
+			t.Fatalf("TOTPCode: %v", err)
+		}
+		rec = doRequest(handler, http.MethodPost, "/api/login/mfa",
+			fmt.Sprintf(`{"challenge":%q,"code":%q}`, challenge.Challenge, code), nil, "")
+	}
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login status = %d, body = %s", rec.Code, rec.Body.String())
 	}

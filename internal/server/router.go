@@ -11,6 +11,7 @@ type Handlers struct {
 	Metrics        http.HandlerFunc
 	Reset          http.HandlerFunc
 	Login          http.HandlerFunc
+	LoginMFA       http.HandlerFunc
 	Logout         http.HandlerFunc
 	Me             http.HandlerFunc
 	Users          http.HandlerFunc
@@ -18,6 +19,17 @@ type Handlers struct {
 	UserUpdateRole http.HandlerFunc
 	AuditEvents    http.HandlerFunc
 	Tenant         http.HandlerFunc
+
+	MFAEnroll        http.HandlerFunc
+	MFAConfirm       http.HandlerFunc
+	MFADisable       http.HandlerFunc
+	MFARecoveryCodes http.HandlerFunc
+
+	PasswordResetRequest http.HandlerFunc
+	PasswordResetConfirm http.HandlerFunc
+	UserPasswordReset    http.HandlerFunc
+	DisableUser          http.HandlerFunc
+	EnableUser           http.HandlerFunc
 
 	PatientCreate http.HandlerFunc
 	PatientList   http.HandlerFunc
@@ -102,6 +114,9 @@ func NewRouter(h Handlers) http.Handler {
 	mux.HandleFunc(RouteReset, h.Reset)
 	mux.HandleFunc(RouteCreateTenant, h.Tenant)
 	mux.HandleFunc(RouteLogin, h.Login)
+	mux.HandleFunc(RouteLoginMFA, h.LoginMFA)
+	mux.HandleFunc(RoutePasswordResetRequest, h.PasswordResetRequest)
+	mux.HandleFunc(RoutePasswordResetConfirm, h.PasswordResetConfirm)
 
 	protected := func(handler http.HandlerFunc) http.Handler {
 		return h.Auth(h.CSRF(handler))
@@ -112,6 +127,13 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteCreateUser, protected(h.Create))
 	mux.Handle(RouteUpdateUserRole, protected(h.UserUpdateRole))
 	mux.Handle(RouteAuditEvents, protected(h.AuditEvents))
+	mux.Handle(RouteMFAEnroll, protected(h.MFAEnroll))
+	mux.Handle(RouteMFAConfirm, protected(h.MFAConfirm))
+	mux.Handle(RouteMFADisable, protected(h.MFADisable))
+	mux.Handle(RouteMFARecoveryCodes, protected(h.MFARecoveryCodes))
+	mux.Handle(RouteUserPasswordReset, protected(h.UserPasswordReset))
+	mux.Handle(RouteDisableUser, protected(h.DisableUser))
+	mux.Handle(RouteEnableUser, protected(h.EnableUser))
 	mux.Handle(RoutePatients, protected(h.PatientList))
 	mux.Handle(RouteCreatePatient, protected(h.PatientCreate))
 	mux.Handle(RoutePatient, protected(h.PatientGet))

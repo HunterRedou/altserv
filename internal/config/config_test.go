@@ -15,6 +15,10 @@ func validSearchKey() string {
 	return base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 32)))
 }
 
+func validMFAKey() string {
+	return base64.StdEncoding.EncodeToString([]byte(strings.Repeat("m", 32)))
+}
+
 func setValidBaseEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("DB_URL", "postgres://user:pass@localhost:5432/altserv?sslmode=disable")
@@ -287,6 +291,69 @@ func TestLoad(t *testing.T) {
 
 			if _, err := Load(); err == nil {
 				t.Fatalf("Load returned nil error for PATIENT_SEARCH_KEY_VERSION=%q", version)
+			}
+		}
+	})
+
+	t.Run("loads authentication hardening settings", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("MFA_ENCRYPTION_KEY", validMFAKey())
+		t.Setenv("MFA_KEY_VERSION", "2")
+		t.Setenv("SESSION_PURGE_INTERVAL", "15m")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if len(cfg.MFAEncryptionKey) != 32 {
+			t.Errorf("MFAEncryptionKey length = %d, want 32", len(cfg.MFAEncryptionKey))
+		}
+		if cfg.MFAKeyVersion != 2 {
+			t.Errorf("MFAKeyVersion = %d, want 2", cfg.MFAKeyVersion)
+		}
+		if cfg.SessionPurgeInterval != 15*time.Minute {
+			t.Errorf("SessionPurgeInterval = %s, want 15m", cfg.SessionPurgeInterval)
+		}
+	})
+
+	t.Run("applies authentication hardening defaults", func(t *testing.T) {
+		setValidBaseEnv(t)
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if len(cfg.MFAEncryptionKey) != 0 {
+			t.Errorf("MFAEncryptionKey = %d bytes, want derived default", len(cfg.MFAEncryptionKey))
+		}
+		if cfg.MFAKeyVersion != 1 {
+			t.Errorf("MFAKeyVersion = %d, want 1", cfg.MFAKeyVersion)
+		}
+		if cfg.SessionPurgeInterval != time.Hour {
+			t.Errorf("SessionPurgeInterval = %s, want 1h", cfg.SessionPurgeInterval)
+		}
+	})
+
+	t.Run("rejects invalid authentication hardening settings", func(t *testing.T) {
+		cases := []struct {
+			key   string
+			value string
+		}{
+			{key: "MFA_ENCRYPTION_KEY", value: "not-base64!"},
+			{key: "MFA_ENCRYPTION_KEY", value: base64.StdEncoding.EncodeToString([]byte("short"))},
+			{key: "MFA_ENCRYPTION_KEY", value: validKey()},
+			{key: "MFA_ENCRYPTION_KEY", value: validSearchKey()},
+			{key: "MFA_KEY_VERSION", value: "0"},
+			{key: "MFA_KEY_VERSION", value: "abc"},
+			{key: "SESSION_PURGE_INTERVAL", value: "1s"},
+			{key: "SESSION_PURGE_INTERVAL", value: "48h"},
+			{key: "SESSION_PURGE_INTERVAL", value: "soon"},
+		}
+		for _, tt := range cases {
+			setValidBaseEnv(t)
+			t.Setenv(tt.key, tt.value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load returned nil error for %s=%q", tt.key, tt.value)
 			}
 		}
 	})

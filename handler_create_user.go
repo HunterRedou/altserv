@@ -239,6 +239,16 @@ func (cfg *apiConfig) handlerUpdateUserRole(w http.ResponseWriter, r *http.Reque
 			return err
 		}
 
+		// The old session carries the old role. Revoking it forces a fresh
+		// login, and a promotion to a privileged role also triggers MFA
+		// enrollment enforcement.
+		if err := q.RevokeAllUserSessions(r.Context(), db.RevokeAllUserSessionsParams{
+			UserID:   targetID,
+			TenantID: actor.TenantID,
+		}); err != nil {
+			return err
+		}
+
 		return cfg.recordAudit(r.Context(), q, audit.Event{
 			TenantID:    actor.TenantID,
 			ActorUserID: actor.ID,

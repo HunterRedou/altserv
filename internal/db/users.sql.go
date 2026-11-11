@@ -15,6 +15,7 @@ const countChefsByTenant = `-- name: CountChefsByTenant :one
 SELECT count(*) FROM users
 WHERE tenant_id = $1
   AND role = 'chef'
+  AND disabled_at IS NULL
 `
 
 func (q *Queries) CountChefsByTenant(ctx context.Context, tenantID uuid.UUID) (int64, error) {
@@ -36,7 +37,7 @@ VALUES (
   $4,
   $5
 )
-RETURNING id, created_at, updated_at, name, hashed_password, email, tenant_id, role
+RETURNING id, created_at, updated_at, name, hashed_password, email, tenant_id, role, disabled_at, mfa_secret_enc, mfa_secret_key_version, mfa_enabled, mfa_enrolled_at
 `
 
 type CreateUserParams struct {
@@ -65,6 +66,11 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.TenantID,
 		&i.Role,
+		&i.DisabledAt,
+		&i.MfaSecretEnc,
+		&i.MfaSecretKeyVersion,
+		&i.MfaEnabled,
+		&i.MfaEnrolledAt,
 	)
 	return i, err
 }
@@ -75,7 +81,7 @@ SET role = $3,
     updated_at = NOW()
 WHERE id = $1
   AND tenant_id = $2
-RETURNING id, created_at, updated_at, name, hashed_password, email, tenant_id, role
+RETURNING id, created_at, updated_at, name, hashed_password, email, tenant_id, role, disabled_at, mfa_secret_enc, mfa_secret_key_version, mfa_enabled, mfa_enrolled_at
 `
 
 type UpdateUserRoleParams struct {
@@ -96,6 +102,11 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.Email,
 		&i.TenantID,
 		&i.Role,
+		&i.DisabledAt,
+		&i.MfaSecretEnc,
+		&i.MfaSecretKeyVersion,
+		&i.MfaEnabled,
+		&i.MfaEnrolledAt,
 	)
 	return i, err
 }

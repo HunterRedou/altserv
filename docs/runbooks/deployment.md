@@ -59,6 +59,19 @@ With Kubernetes, set `terminationGracePeriodSeconds` to at least
 Do not send `SIGKILL` during a normal deploy. It skips the drain and can cut a
 report or billing transaction.
 
+## Authentication after deploy
+- The migration `internal/db/sql/schema/022_auth_hardening.sql` adds MFA,
+  password reset, user disable and the session purge.
+- Back up `MFA_ENCRYPTION_KEY` (or the derived key source) with the other
+  secrets. A lost MFA key forces every privileged user to re-enroll.
+- A `chef` or `platform_admin` without MFA gets a restricted session and must
+  enroll before other routes work. Plan the first login for each privileged
+  account.
+- Tell users to store their recovery codes. There is no support bypass.
+- `SESSION_PURGE_INTERVAL` controls the background purge. The default is 1h.
+- A password reset token is returned to the issuer. No email is sent. Hand the
+  token over out of band.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz
@@ -73,7 +86,8 @@ Check:
 - p95 latency unchanged
 - pool use below 80 percent
 - no new slow-query alert
-- a login, a patient read and a report read work
+- an employee login, a privileged MFA login, a patient read and a report read
+  work
 
 ## Rollback
 1. Redeploy the previous image digest.
