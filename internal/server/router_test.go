@@ -37,6 +37,9 @@ func TestNewRouter(t *testing.T) {
 
 	router := NewRouter(Handlers{
 		App:           http.HandlerFunc(ok),
+		Health:        ok,
+		Ready:         ok,
+		Metrics:       ok,
 		Reset:         ok,
 		Login:         ok,
 		Logout:        ok,
@@ -67,6 +70,9 @@ func TestNewRouter(t *testing.T) {
 	}{
 		{name: "public login", method: http.MethodPost, path: "/api/login", want: http.StatusOK},
 		{name: "public tenant creation", method: http.MethodPost, path: "/api/tenants", want: http.StatusOK},
+		{name: "public liveness", method: http.MethodGet, path: "/healthz", want: http.StatusOK},
+		{name: "public readiness", method: http.MethodGet, path: "/readyz", want: http.StatusOK},
+		{name: "public metrics", method: http.MethodGet, path: "/metrics", want: http.StatusOK},
 		{name: "protected route without session", method: http.MethodGet, path: "/api/me", want: http.StatusUnauthorized},
 		{name: "protected read with session", method: http.MethodGet, path: "/api/me", auth: true, want: http.StatusOK},
 		{name: "protected write without csrf", method: http.MethodPost, path: "/api/users", auth: true, want: http.StatusForbidden},

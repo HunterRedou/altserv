@@ -5,6 +5,12 @@ package server
 const (
 	RouteApp = "/app/"
 
+	// Operational endpoints are public so a load balancer and Prometheus can
+	// reach them without a user session. They never expose tenant data.
+	RouteHealth  = "GET /healthz"
+	RouteReady   = "GET /readyz"
+	RouteMetrics = "GET /metrics"
+
 	RouteReset          = "POST /admin/reset"
 	RouteCreateTenant   = "POST /api/tenants"
 	RouteLogin          = "POST /api/login"

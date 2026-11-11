@@ -17,6 +17,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/config"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/observability"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
 	"github.com/HunterRedou/altserv/internal/server"
@@ -44,6 +45,9 @@ type apiConfig struct {
 	reportService     *reports.Service
 	billingService    *billing.Service
 	loginLimiter      *loginRateLimiter
+	metrics           *observability.Registry
+	health            *observability.Health
+	metricsToken      string
 }
 
 func main() {
@@ -60,9 +64,18 @@ func main() {
 	}
 	defer dbConn.Close()
 
+	// Bound the pool so a traffic spike cannot exhaust PostgreSQL connections.
+	dbConn.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	dbConn.SetMaxIdleConns(cfg.DBMaxIdleConns)
+	dbConn.SetConnMaxLifetime(cfg.DBConnMaxLifetime)
+
 	if err := dbConn.Ping(); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
+
+	metrics := observability.NewRegistry()
+	metrics.SetPoolStats(dbConn.Stats)
+	health := observability.NewHealth(dbConn)
 
 	patientCipher, err := patients.NewCipher(cfg.PatientEncryptionKey, cfg.PatientKeyVersion)
 	if err != nil {
@@ -98,6 +111,9 @@ func main() {
 		reportService:     reportService,
 		billingService:    billingService,
 		loginLimiter:      newLoginRateLimiter(10, time.Minute),
+		metrics:           metrics,
+		health:            health,
+		metricsToken:      cfg.MetricsToken,
 	}
 
 	// Pick up tenants that were still pending when the previous process stopped.
@@ -106,9 +122,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	metrics.WatchBackupMarker(ctx, cfg.BackupMarkerFile, time.Minute)
+	observability.NewSlowQueryWatcher(dbConn, metrics, cfg.SlowQueryThreshold, 30*time.Second).Run(ctx)
+
 	srv := server.New(cfg.Addr(), apiCfg.routes())
 	log.Printf("Serving on %s", cfg.Addr())
-	if err := srv.Run(ctx); err != nil {
+	if err := runWithDrain(ctx, health, cfg.ShutdownDrainDelay, srv.Run); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }

@@ -31,12 +31,14 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, err := cfg.db.GetByEmail(r.Context(), params.Email)
 	if err != nil {
+		cfg.metrics.IncLoginFailure()
 		respondWithError(w, http.StatusUnauthorized, "Incorrect Email", nil)
 		return
 	}
 
 	match, err := auth.CheckHash(params.Password, user.HashedPassword)
 	if err != nil || !match {
+		cfg.metrics.IncLoginFailure()
 		respondWithError(w, http.StatusUnauthorized, "Password not matching", nil)
 		return
 	}

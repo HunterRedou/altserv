@@ -1,0 +1,15 @@
+# Minimal Alertmanager template. Add one verified receiver before production.
+# A webhook, email or on-call integration must be chosen by the operator.
+route:
+  receiver: default
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+    # Example (replace with the operator's endpoint):
+    # webhook_configs:
+    #   - url: https://alerts.example.invalid/altserv
+    #     send_resolved: true

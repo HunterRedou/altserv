@@ -1,0 +1,106 @@
+# Local and small-installation deployment. Production must use managed secrets,
+# a verified backup/PITR setup and a TLS-terminating proxy in front of altserv.
+#
+# Usage:
+#   cp .env.example .env          # fill in real keys
+#   docker compose -f deployments/docker/docker-compose.yml up --build
+#
+# The database migrations are not run automatically. Run them once:
+#   docker compose -f deployments/docker/docker-compose.yml run --rm migrate
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-altserv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-altserv}
+      POSTGRES_DB: ${POSTGRES_DB:-altserv}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-altserv} -d $${POSTGRES_DB:-altserv}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      # Keep the database off the public interface in production.
+      - "127.0.0.1:5432:5432"
+
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: postgres://${POSTGRES_USER:-altserv}:${POSTGRES_PASSWORD:-altserv}@postgres:5432/${POSTGRES_DB:-altserv}?sslmode=disable
+    volumes:
+      - ../../internal/db/sql/schema:/migrations:ro
+    command: ["-dir", "/migrations", "up"]
+    profiles: ["tools"]
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../.env
+    environment:
+      DB_URL: postgres://${POSTGRES_USER:-altserv}:${POSTGRES_PASSWORD:-altserv}@postgres:5432/${POSTGRES_DB:-altserv}?sslmode=disable
+      PLATFORM: ${PLATFORM:-prod}
+      PORT: "8080"
+      # Set METRICS_TOKEN in .env so Prometheus must authenticate.
+      BACKUP_MARKER_FILE: /var/lib/altserv/last-backup
+    volumes:
+      - backup-marker:/var/lib/altserv
+    ports:
+      - "8080:8080"
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    volumes:
+      - ../monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ../monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "127.0.0.1:9115:9115"
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  backup-marker:

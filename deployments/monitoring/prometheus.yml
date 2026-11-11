@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: altserv
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8080"]
+    # Production: set METRICS_TOKEN in .env and mount the same value as a file.
+    # The token is sent as an Authorization header. Never commit the token.
+    #
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/metrics_token
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Probes the readiness endpoint from outside the process. Readiness fails
+  # while the process drains, so the alert and the load balancer agree.
+  - job_name: altserv-readiness
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://app:8080/readyz"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

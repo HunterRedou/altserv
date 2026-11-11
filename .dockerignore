@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+altserv
+handler
+out
+connetion.txt
+firmverify.txt
+pflege_docs_1-25
+docs
+**/*_test.go
+deployments/loadtest
+deployments/sql
+deployments/docker
+README.md

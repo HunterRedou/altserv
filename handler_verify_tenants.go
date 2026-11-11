@@ -67,6 +67,7 @@ func (cfg *apiConfig) verifyTenantAsync(tenantID uuid.UUID, ustID string) {
 			return vies.CheckWithRetry(ctx, ustID, 4, 4*time.Hour)
 		})
 		if err != nil {
+			cfg.metrics.IncJobError("tenant_verification")
 			log.Printf("verify tenant %s: giving up: %v", tenantID, err)
 		}
 	}()
@@ -78,6 +79,7 @@ func (cfg *apiConfig) verifyTenantAsync(tenantID uuid.UUID, ustID string) {
 func (cfg *apiConfig) resumePendingTenantVerification(ctx context.Context) {
 	tenants, err := cfg.db.SelectPendingTenants(ctx)
 	if err != nil {
+		cfg.metrics.IncJobError("tenant_verification")
 		log.Printf("resume pending tenant verification: %v", err)
 		return
 	}

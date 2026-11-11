@@ -9,9 +9,14 @@ import (
 )
 
 const (
-	defaultPort            = "8080"
-	defaultSessionDuration = 24 * time.Hour
-	defaultKeyVersion      = 1
+	defaultPort               = "8080"
+	defaultSessionDuration    = 24 * time.Hour
+	defaultKeyVersion         = 1
+	defaultDBMaxOpenConns     = 20
+	defaultDBMaxIdleConns     = 5
+	defaultDBConnMaxLifetime  = 30 * time.Minute
+	defaultShutdownDrainDelay = 5 * time.Second
+	defaultSlowQueryThreshold = 1 * time.Second
 )
 
 // Config is the runtime configuration loaded from environment variables.
@@ -21,6 +26,28 @@ type Config struct {
 	Platform        string
 	Port            string
 	SessionDuration time.Duration
+
+	// Database pool limits. They keep a traffic spike from exhausting the
+	// PostgreSQL connection limit (doc 20).
+	DBMaxOpenConns    int
+	DBMaxIdleConns    int
+	DBConnMaxLifetime time.Duration
+
+	// ShutdownDrainDelay is the time between failing readiness and closing the
+	// listener, so a load balancer can stop sending new requests.
+	ShutdownDrainDelay time.Duration
+
+	// MetricsToken protects GET /metrics when set. An empty value leaves the
+	// endpoint open, which is only acceptable for local development.
+	MetricsToken string
+
+	// BackupMarkerFile is an optional file whose modification time is the last
+	// successful backup. The process exports its age as a metric.
+	BackupMarkerFile string
+
+	// SlowQueryThreshold is the runtime above which a statement counts as slow
+	// in the pg_stat_activity sample.
+	SlowQueryThreshold time.Duration
 
 	// PatientEncryptionKey is the AES-256 key for patient PII. It must be
 	// supplied by the environment (KMS/secret manager in production).
@@ -42,6 +69,16 @@ func Load() (Config, error) {
 		SessionDuration:   defaultSessionDuration,
 		PatientKeyVersion: defaultKeyVersion,
 
+		DBMaxOpenConns:     defaultDBMaxOpenConns,
+		DBMaxIdleConns:     defaultDBMaxIdleConns,
+		DBConnMaxLifetime:  defaultDBConnMaxLifetime,
+		ShutdownDrainDelay: defaultShutdownDrainDelay,
+
+		MetricsToken:     os.Getenv("METRICS_TOKEN"),
+		BackupMarkerFile: os.Getenv("BACKUP_MARKER_FILE"),
+
+		SlowQueryThreshold: defaultSlowQueryThreshold,
+
 		PatientSearchKeyVersion: defaultKeyVersion,
 	}
 
@@ -51,6 +88,46 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("SESSION_DURATION: %w", err)
 		}
 		cfg.SessionDuration = duration
+	}
+
+	if raw := os.Getenv("DB_MAX_OPEN_CONNS"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("DB_MAX_OPEN_CONNS must be a number: %w", err)
+		}
+		cfg.DBMaxOpenConns = value
+	}
+
+	if raw := os.Getenv("DB_MAX_IDLE_CONNS"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("DB_MAX_IDLE_CONNS must be a number: %w", err)
+		}
+		cfg.DBMaxIdleConns = value
+	}
+
+	if raw := os.Getenv("DB_CONN_MAX_LIFETIME"); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("DB_CONN_MAX_LIFETIME: %w", err)
+		}
+		cfg.DBConnMaxLifetime = duration
+	}
+
+	if raw := os.Getenv("SHUTDOWN_DRAIN_DELAY"); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("SHUTDOWN_DRAIN_DELAY: %w", err)
+		}
+		cfg.ShutdownDrainDelay = duration
+	}
+
+	if raw := os.Getenv("SLOW_QUERY_THRESHOLD"); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("SLOW_QUERY_THRESHOLD: %w", err)
+		}
+		cfg.SlowQueryThreshold = duration
 	}
 
 	if raw := os.Getenv("PATIENT_ENCRYPTION_KEY"); raw != "" {

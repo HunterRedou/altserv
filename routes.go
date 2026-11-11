@@ -31,6 +31,9 @@ func (cfg *apiConfig) routes() http.Handler {
 
 	return server.NewRouter(server.Handlers{
 		App:                     cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))),
+		Health:                  cfg.health.Live,
+		Ready:                   cfg.health.Ready,
+		Metrics:                 cfg.metricsHandler(),
 		Reset:                   cfg.handlerReset,
 		Tenant:                  cfg.handlerCreateTenant,
 		Login:                   cfg.middlewareLoginRateLimit(cfg.handlerLogin),
@@ -105,10 +108,12 @@ func (cfg *apiConfig) routes() http.Handler {
 // globalMiddleware applies transport-level hardening to every route. RequestID
 // runs outside this chain, so the logs and panic reports can correlate events.
 func (cfg *apiConfig) globalMiddleware(next http.Handler) http.Handler {
-	return cfg.middlewareRecover(
-		cfg.middlewareSecurityHeaders(
-			cfg.middlewareBodyLimit(
-				cfg.middlewareLogging(next),
+	return cfg.metrics.Middleware(
+		cfg.middlewareRecover(
+			cfg.middlewareSecurityHeaders(
+				cfg.middlewareBodyLimit(
+					cfg.middlewareLogging(next),
+				),
 			),
 		),
 	)

@@ -6,6 +6,9 @@ import "net/http"
 // It keeps the server package independent of the main package.
 type Handlers struct {
 	App            http.Handler
+	Health         http.HandlerFunc
+	Ready          http.HandlerFunc
+	Metrics        http.HandlerFunc
 	Reset          http.HandlerFunc
 	Login          http.HandlerFunc
 	Logout         http.HandlerFunc
@@ -93,6 +96,9 @@ func NewRouter(h Handlers) http.Handler {
 	if h.App != nil {
 		mux.Handle(RouteApp, h.App)
 	}
+	mux.HandleFunc(RouteHealth, h.Health)
+	mux.HandleFunc(RouteReady, h.Ready)
+	mux.HandleFunc(RouteMetrics, h.Metrics)
 	mux.HandleFunc(RouteReset, h.Reset)
 	mux.HandleFunc(RouteCreateTenant, h.Tenant)
 	mux.HandleFunc(RouteLogin, h.Login)

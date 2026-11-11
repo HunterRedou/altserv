@@ -27,6 +27,93 @@ func setValidBaseEnv(t *testing.T) {
 	t.Setenv("PATIENT_SEARCH_KEY_VERSION", "1")
 }
 
+func TestLoadObservabilityAndPoolSettings(t *testing.T) {
+	t.Run("applies defaults", func(t *testing.T) {
+		setValidBaseEnv(t)
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.DBMaxOpenConns != 20 || cfg.DBMaxIdleConns != 5 {
+			t.Errorf("pool = %d/%d, want 20/5", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
+		}
+		if cfg.DBConnMaxLifetime != 30*time.Minute {
+			t.Errorf("lifetime = %s, want 30m", cfg.DBConnMaxLifetime)
+		}
+		if cfg.ShutdownDrainDelay != 5*time.Second {
+			t.Errorf("drain = %s, want 5s", cfg.ShutdownDrainDelay)
+		}
+		if cfg.MetricsToken != "" || cfg.BackupMarkerFile != "" {
+			t.Errorf("metrics token or backup marker unexpectedly set")
+		}
+		if cfg.SlowQueryThreshold != time.Second {
+			t.Errorf("slow query threshold = %s, want 1s", cfg.SlowQueryThreshold)
+		}
+	})
+
+	t.Run("reads overrides", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("DB_MAX_OPEN_CONNS", "40")
+		t.Setenv("DB_MAX_IDLE_CONNS", "10")
+		t.Setenv("DB_CONN_MAX_LIFETIME", "10m")
+		t.Setenv("SHUTDOWN_DRAIN_DELAY", "30s")
+		t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+		t.Setenv("BACKUP_MARKER_FILE", "/var/lib/altserv/last-backup")
+		t.Setenv("SLOW_QUERY_THRESHOLD", "250ms")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.DBMaxOpenConns != 40 || cfg.DBMaxIdleConns != 10 {
+			t.Errorf("pool = %d/%d, want 40/10", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
+		}
+		if cfg.DBConnMaxLifetime != 10*time.Minute {
+			t.Errorf("lifetime = %s, want 10m", cfg.DBConnMaxLifetime)
+		}
+		if cfg.ShutdownDrainDelay != 30*time.Second {
+			t.Errorf("drain = %s, want 30s", cfg.ShutdownDrainDelay)
+		}
+		if cfg.MetricsToken != "0123456789abcdef" {
+			t.Errorf("metrics token = %q", cfg.MetricsToken)
+		}
+		if cfg.BackupMarkerFile != "/var/lib/altserv/last-backup" {
+			t.Errorf("backup marker = %q", cfg.BackupMarkerFile)
+		}
+		if cfg.SlowQueryThreshold != 250*time.Millisecond {
+			t.Errorf("slow query threshold = %s, want 250ms", cfg.SlowQueryThreshold)
+		}
+	})
+
+	t.Run("rejects invalid values", func(t *testing.T) {
+		cases := []struct {
+			key   string
+			value string
+		}{
+			{key: "DB_MAX_OPEN_CONNS", value: "0"},
+			{key: "DB_MAX_OPEN_CONNS", value: "abc"},
+			{key: "DB_MAX_IDLE_CONNS", value: "-1"},
+			{key: "DB_MAX_IDLE_CONNS", value: "99"},
+			{key: "DB_CONN_MAX_LIFETIME", value: "0s"},
+			{key: "DB_CONN_MAX_LIFETIME", value: "soon"},
+			{key: "SHUTDOWN_DRAIN_DELAY", value: "-1s"},
+			{key: "SHUTDOWN_DRAIN_DELAY", value: "10m"},
+			{key: "METRICS_TOKEN", value: "short"},
+			{key: "SLOW_QUERY_THRESHOLD", value: "0s"},
+			{key: "SLOW_QUERY_THRESHOLD", value: "2m"},
+			{key: "SLOW_QUERY_THRESHOLD", value: "fast"},
+		}
+		for _, tt := range cases {
+			setValidBaseEnv(t)
+			t.Setenv(tt.key, tt.value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load returned nil error for %s=%q", tt.key, tt.value)
+			}
+		}
+	})
+}
+
 func TestLoad(t *testing.T) {
 	t.Run("loads valid configuration", func(t *testing.T) {
 		setValidBaseEnv(t)

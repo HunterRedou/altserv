@@ -1,0 +1,103 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {"expr": "sum by (status) (rate(altserv_http_requests_total[5m]))", "legendFormat": "{{status}}", "refId": "A"}
+      ],
+      "title": "Requests per second by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [
+        {"expr": "sum(rate(altserv_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(altserv_http_requests_total[5m])), 0.001)", "legendFormat": "5xx ratio", "refId": "A"}
+      ],
+      "title": "Error rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum by (le) (rate(altserv_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(altserv_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(altserv_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C"}
+      ],
+      "title": "Request latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "altserv_http_in_flight", "legendFormat": "in flight", "refId": "A"},
+        {"expr": "altserv_db_pool_in_use", "legendFormat": "pool in use", "refId": "B"},
+        {"expr": "altserv_db_pool_idle", "legendFormat": "pool idle", "refId": "C"},
+        {"expr": "altserv_db_pool_max_open_connections", "legendFormat": "pool max", "refId": "D"}
+      ],
+      "title": "Concurrency and database pool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "id": 5,
+      "targets": [
+        {"expr": "altserv_db_slow_queries", "legendFormat": "slow statements", "refId": "A"}
+      ],
+      "title": "Slow queries above threshold",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "id": 6,
+      "targets": [
+        {"expr": "increase(altserv_login_failures_total[5m])", "legendFormat": "failed logins / 5m", "refId": "A"},
+        {"expr": "sum by (job) (increase(altserv_job_errors_total[10m]))", "legendFormat": "job {{job}} errors / 10m", "refId": "B"}
+      ],
+      "title": "Security and job signals",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "id": 7,
+      "targets": [
+        {"expr": "altserv_backup_age_seconds", "legendFormat": "backup age", "refId": "A"}
+      ],
+      "title": "Backup age",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["altserv"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "altserv overview",
+  "uid": "altserv-overview",
+  "version": 1
+}

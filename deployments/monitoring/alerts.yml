@@ -1,0 +1,109 @@
+groups:
+  - name: altserv-availability
+    rules:
+      - alert: AltservDown
+        expr: up{job="altserv"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: altserv is not reachable
+          description: Prometheus cannot scrape altserv for two minutes. Check the container, the process log and /healthz.
+
+      - alert: AltservReadinessFailing
+        expr: probe_success{job="altserv-readiness"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: altserv readiness is failing
+          description: The load balancer should remove this instance. Check /readyz and the database.
+
+  - name: altserv-http
+    rules:
+      - alert: AltservHighErrorRate
+        expr: |
+          sum(rate(altserv_http_requests_total{status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(altserv_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5 percent of requests fail with 5xx
+          description: Check the request log, the database pool and recent deploys.
+
+      - alert: AltservHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(altserv_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: p95 request latency is above one second
+          description: Check slow queries and database pool saturation before scaling out.
+
+  - name: altserv-database
+    rules:
+      - alert: AltservPoolSaturation
+        expr: |
+          altserv_db_pool_in_use
+            /
+          clamp_min(altserv_db_pool_max_open_connections, 1)
+          > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 80 percent of the database pool is in use
+          description: Raise DB_MAX_OPEN_CONNS only after checking the PostgreSQL connection limit.
+
+      - alert: AltservSlowQueries
+        expr: altserv_db_slow_queries > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Slow statements are running
+          description: Use the slow-query runbook and EXPLAIN ANALYZE. Do not cancel a statement before checking its age and owner.
+
+      - alert: AltservBackupStale
+        expr: altserv_backup_age_seconds > 26 * 3600
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: The last successful backup is older than 26 hours
+          description: Check the backup job and the marker file. Do not assume the database is recoverable.
+
+      - alert: AltservBackupMarkerMissing
+        expr: absent(altserv_backup_age_seconds) and on() (altserv_backup_marker_read_errors_total > 0)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: The backup marker is configured but cannot be read
+          description: The app reports backup marker read errors and no backup age. Check the mount and the backup job.
+
+  - name: altserv-security-and-jobs
+    rules:
+      - alert: AltservLoginFailures
+        expr: increase(altserv_login_failures_total[5m]) > 20
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Many failed logins in five minutes
+          description: Check the source addresses and the rate limiter. Do not log the attempted email address.
+
+      - alert: AltservJobErrors
+        expr: increase(altserv_job_errors_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A background job failed
+          description: Check the job label and the process log. Tenant verification retries are expected to be rare.
