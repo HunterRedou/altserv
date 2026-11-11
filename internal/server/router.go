@@ -100,6 +100,25 @@ type Handlers struct {
 	BreakGlassRevoke  http.HandlerFunc
 	BreakGlassPatient http.HandlerFunc
 
+	RetentionPolicyList    http.HandlerFunc
+	RetentionPolicyCreate  http.HandlerFunc
+	RetentionPolicyUpdate  http.HandlerFunc
+	RetentionPolicyConfirm http.HandlerFunc
+	RetentionPolicyDisable http.HandlerFunc
+	RetentionReview        http.HandlerFunc
+
+	LegalHoldList   http.HandlerFunc
+	LegalHoldCreate http.HandlerFunc
+	LegalHoldLift   http.HandlerFunc
+
+	DeletionRequestList    http.HandlerFunc
+	DeletionRequestCreate  http.HandlerFunc
+	DeletionRequestApprove http.HandlerFunc
+	DeletionRequestReject  http.HandlerFunc
+	DeletionRequestCancel  http.HandlerFunc
+	DeletionRequestExecute http.HandlerFunc
+	DeletionRegisterList   http.HandlerFunc
+
 	Auth      func(http.Handler) http.Handler
 	CSRF      func(http.Handler) http.Handler
 	RequestID func(http.Handler) http.Handler
@@ -202,6 +221,22 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteDenyBreakGlassGrant, protected(h.BreakGlassDeny))
 	mux.Handle(RouteRevokeBreakGlassGrant, protected(h.BreakGlassRevoke))
 	mux.Handle(RouteBreakGlassPatient, protected(h.BreakGlassPatient))
+	mux.Handle(RouteRetentionPolicies, protected(h.RetentionPolicyList))
+	mux.Handle(RouteCreateRetentionPolicy, protected(h.RetentionPolicyCreate))
+	mux.Handle(RouteUpdateRetentionPolicy, protected(h.RetentionPolicyUpdate))
+	mux.Handle(RouteConfirmRetentionPolicy, protected(h.RetentionPolicyConfirm))
+	mux.Handle(RouteDisableRetentionPolicy, protected(h.RetentionPolicyDisable))
+	mux.Handle(RouteRetentionReview, protected(h.RetentionReview))
+	mux.Handle(RouteLegalHolds, protected(h.LegalHoldList))
+	mux.Handle(RouteCreateLegalHold, protected(h.LegalHoldCreate))
+	mux.Handle(RouteLiftLegalHold, protected(h.LegalHoldLift))
+	mux.Handle(RouteDeletionRequests, protected(h.DeletionRequestList))
+	mux.Handle(RouteCreateDeletionRequest, protected(h.DeletionRequestCreate))
+	mux.Handle(RouteApproveDeletionRequest, protected(h.DeletionRequestApprove))
+	mux.Handle(RouteRejectDeletionRequest, protected(h.DeletionRequestReject))
+	mux.Handle(RouteCancelDeletionRequest, protected(h.DeletionRequestCancel))
+	mux.Handle(RouteExecuteDeletionRequest, protected(h.DeletionRequestExecute))
+	mux.Handle(RouteDeletionRegister, protected(h.DeletionRegisterList))
 
 	var handler http.Handler = mux
 	if h.Global != nil {

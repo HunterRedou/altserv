@@ -84,6 +84,24 @@ report or billing transaction.
 - Monitor `break_glass.*` audit events and review open grants. Revoke a grant as
   soon as the support case ends.
 
+## Retention and deletion after deploy
+
+- The migration `internal/db/sql/schema/024_retention_deletion.sql` adds the
+  retention and deletion tables, RLS, append-only triggers, the review
+  function, and `patients.status_changed_at`. Run goose before the new
+  application.
+- `RETENTION_REVIEW_INTERVAL` controls the background review. The default is
+  24h. The minimum is 1h and the maximum is 7d.
+- The review job reports candidate counts only. It never deletes or creates
+  deletion requests. Monitor `altserv_retention_reviews_total` and
+  `altserv_retention_review_candidates_total`.
+- No retention period is seeded. The controller must create and confirm a
+  policy after professional review.
+- Legal holds and deletion requests are chef-only. `platform_admin` is denied.
+- The deletion register is append-only. Do not grant update or delete on it.
+- The application role needs `DELETE` on `break_glass_grants` so a patient
+  deletion can cascade. Migration 024 grants it.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz

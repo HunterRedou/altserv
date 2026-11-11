@@ -607,6 +607,134 @@ See `docs/decisions/ADR-021-break-glass-access.md`.
 
 ---
 
+## Retention and deletion (Step 4)
+
+### What it does
+
+Step 4 adds controlled retention review and patient deletion. The application
+
+never deletes care data on its own. A tenant may store a retention policy, but a
+
+new policy is disabled and only an explicit confirmation by a tenant `chef`
+
+enables it. The scheduled review only counts candidates and writes a
+
+`retention.reviewed` audit event. It does not create deletion requests and does
+
+not delete anything.
+
+Patient deletion is a separate, explicit workflow: one `chef` requests, a
+
+different `chef` approves and executes. `platform_admin` is denied. The deletion
+
+register is append-only evidence. Legal holds block deletion while active.
+
+### Flow
+
+```
+
+chef A requests deletion of patient P
+
+        |
+
+        v
+
++---------------------+
+
+| pending request     |  active legal hold -> 409
+
++----------+----------+
+
+           |
+
+           v
+
+chef B approves (different person)
+
+        |
+
+        v
+
++---------------------+
+
+| approved            |
+
++----------+----------+
+
+           |
+
+           v
+
+chef B executes
+
+        |
+
+        v
+
+delete in dependency order
+
+        |
+
+        v
+
+append-only register entry
+
+```
+
+### Rules
+
+- Retention policies are tenant-configured, disabled by default, and confirmed
+
+  by a `chef`. No period is seeded.
+
+- The review function `retention_review_candidates(filter_tenant UUID DEFAULT NULL)`
+
+  is `SECURITY DEFINER`. The job calls it with `NULL` (all tenants); the chef API
+
+  calls it with the session tenant.
+
+- The scheduled job runs once at startup and then every `RETENTION_REVIEW_INTERVAL`
+
+  (default 24h, minimum 1h, maximum 7d). Metrics:
+
+  `altserv_retention_reviews_total` and `altserv_retention_review_candidates_total`.
+
+- Legal holds are tenant-bound, patient-scoped or tenant-wide, and block deletion
+
+  while active. A hold is reviewed at least every six months.
+
+- Deletion requires four eyes by two different tenant chefs. `platform_admin` is
+
+  denied. An active legal hold blocks request, approval and execution.
+
+- Execution order: billing runs, reports, report activities, visits, activities,
+
+  templates, assignments, search tokens, break-glass grants, then the patient.
+
+- The `deletion_register` is append-only: the app role has `SELECT` and `INSERT`
+
+  only; update, delete and truncate are blocked by triggers for every role.
+
+- Audit metadata never contains patient names, free-text reasons, notes,
+
+  legal-basis text or health data.
+
+### Limits
+
+- Tenant termination still fails once the tenant has audit events. Step 5 must
+
+  address this.
+
+- Break-glass grants cascade away with a deleted patient, so the evidence that
+
+  support access was approved can be lost. Export the grant first if required.
+
+- No automated way to delete a subject from backups.
+
+See `docs/decisions/ADR-022-retention-deletion.md`.
+
+---
+
 ## Project status
 
 ### Completed
@@ -616,7 +744,7 @@ See `docs/decisions/ADR-021-break-glass-access.md`.
 | Go backend, PostgreSQL, sqlc, migrations | Complete |
 | Session authentication, CSRF, rate limit | Complete |
 | Step 2: MFA, password reset, user disable, session purge | Complete |
-| Step 3: break-glass access for `platform_admin` | Complete |
+| Step 3: break-glass access for `platform_admin` | Complete |\n| Step 4: retention review and patient deletion | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -651,7 +779,7 @@ The following checks pass:
 - Migrations `internal/db/sql/schema/021_audit_hardening.sql`,
   `internal/db/sql/schema/022_auth_hardening.sql` and
   `internal/db/sql/schema/023_break_glass.sql` are applied to the development
-  and test databases. Goose version is 23.
+  and test databases. Goose version is 24.
 - The deployment YAML and JSON files are valid.
 - `docker compose config` passes.
 - All compliance links and file references resolve.
@@ -663,7 +791,7 @@ These are real gaps. They are not open design questions.
 1. No tenant-wide break-glass grant and no support UI. One grant covers one
    named patient.
 2. No email delivery for password reset or MFA changes.
-3. No automated retention or deletion job. No patient delete API.
+3. Tenant termination still fails once the tenant has audit events. Step 5 must address this.
 4. Tenant deletion fails once the tenant has audit events.
 5. No external append-only audit sink. A superuser can disable the triggers.
 6. No shipped PITR product and no automated PITR drill.

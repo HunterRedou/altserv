@@ -21,6 +21,10 @@ const (
 	minSessionPurgeInterval = time.Minute
 	// maxSessionPurgeInterval bounds how stale an expired session can remain.
 	maxSessionPurgeInterval = 24 * time.Hour
+	// minRetentionReviewInterval keeps the cross-tenant review from spinning.
+	minRetentionReviewInterval = time.Hour
+	// maxRetentionReviewInterval bounds how stale a candidate count can be.
+	maxRetentionReviewInterval = 7 * 24 * time.Hour
 )
 
 func (c Config) validate() error {
@@ -116,6 +120,12 @@ func (c Config) validate() error {
 	}
 	if c.SessionPurgeInterval > maxSessionPurgeInterval {
 		return fmt.Errorf("SESSION_PURGE_INTERVAL must not exceed %s, got %s", maxSessionPurgeInterval, c.SessionPurgeInterval)
+	}
+	if c.RetentionReviewInterval < minRetentionReviewInterval {
+		return fmt.Errorf("RETENTION_REVIEW_INTERVAL must be at least %s, got %s", minRetentionReviewInterval, c.RetentionReviewInterval)
+	}
+	if c.RetentionReviewInterval > maxRetentionReviewInterval {
+		return fmt.Errorf("RETENTION_REVIEW_INTERVAL must not exceed %s, got %s", maxRetentionReviewInterval, c.RetentionReviewInterval)
 	}
 
 	return nil

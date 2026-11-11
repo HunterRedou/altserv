@@ -103,4 +103,23 @@ const (
 	RouteDenyBreakGlassGrant    = "POST /api/break-glass/grants/{id}/deny"
 	RouteRevokeBreakGlassGrant  = "POST /api/break-glass/grants/{id}/revoke"
 	RouteBreakGlassPatient      = "GET /api/break-glass/grants/{id}/patient"
+
+	// Retention and deletion. Every route is chef-only. A platform_admin is
+	// denied and never gets patient health data through these routes.
+	RouteRetentionPolicies      = "GET /api/retention/policies"
+	RouteCreateRetentionPolicy  = "POST /api/retention/policies"
+	RouteUpdateRetentionPolicy  = "PATCH /api/retention/policies/{id}"
+	RouteConfirmRetentionPolicy = "POST /api/retention/policies/{id}/confirm"
+	RouteDisableRetentionPolicy = "POST /api/retention/policies/{id}/disable"
+	RouteRetentionReview        = "POST /api/retention/review"
+	RouteLegalHolds             = "GET /api/legal-holds"
+	RouteCreateLegalHold        = "POST /api/legal-holds"
+	RouteLiftLegalHold          = "POST /api/legal-holds/{id}/lift"
+	RouteDeletionRequests       = "GET /api/deletion-requests"
+	RouteCreateDeletionRequest  = "POST /api/deletion-requests"
+	RouteApproveDeletionRequest = "POST /api/deletion-requests/{id}/approve"
+	RouteRejectDeletionRequest  = "POST /api/deletion-requests/{id}/reject"
+	RouteCancelDeletionRequest  = "POST /api/deletion-requests/{id}/cancel"
+	RouteExecuteDeletionRequest = "POST /api/deletion-requests/{id}/execute"
+	RouteDeletionRegister       = "GET /api/deletion-register"
 )

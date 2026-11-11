@@ -30,7 +30,7 @@ is not legal advice.
 | Data set | Delete path | Current state | Notes |
 | --- | --- | --- | --- |
 | Session | Expiry or logout | Logout revokes the session. `DeleteExpiredSessions` exists but is not scheduled. | Add a scheduled purge. |
-| Patient | No API | Not implemented | Requires a controlled procedure. See below. |
+| Patient | Deletion request workflow | Implemented | Chef requests, a different chef approves and executes. Four-eyes. Legal holds block. Append-only register. See below. |
 | Patient search tokens | Cascades with the patient | Implemented via FK | No separate action needed. |
 | Assignment | Revoke, not delete | Implemented | Revocation keeps the history. |
 | Activity | No delete API | Not implemented | A `voided` status exists. It is not a deletion. |
@@ -39,9 +39,9 @@ is not legal advice.
 | Billing run | Void | Implemented | Voiding deletes lines and findings but keeps the run row. |
 | Billing line and finding | Cascades from a voided run | Implemented | Activities become billable again. |
 | Break-glass grant | Revoke, not delete | Implemented | Tenant-bound and kept as decision evidence. A grant cascades away with its patient or tenant. |
-| Audit event | Not deletable | Append-only triggers and revoked privileges | Tenant deletion cascades audit rows. |
+| Audit event | Not deletable | Append-only triggers and revoked privileges | Tenant deletion cascades audit rows. Audit metadata never contains patient names, free-text reasons, notes, legal-basis text or health data. |
 | User | No delete API | Not implemented | Disable and revoke sessions instead. Records reference the user with `RESTRICT`. |
-| Tenant | Database query only | `DeleteTenant` exists | Not exposed as an API. Used on a failed USt-IdNr check. Fails once the tenant has audit events. |
+| Tenant | Database query only | `DeleteTenant` exists | Not exposed as an API. Used on a failed USt-IdNr check. Fails once the tenant has audit events. Tenant termination is still a controlled procedure. |
 | Backup | Backup product expiry | Operator procedure | See `backup-policy.md`. |
 
 ## Patient deletion procedure
@@ -195,12 +195,33 @@ A deletion is complete only when:
 - the backup and restore implications are documented
 - the data subject or the controller receives a written response
 
+## Patient deletion workflow (implemented)
+
+The application exposes a controlled, four-eyes workflow under
+`/api/deletion-requests`:
+
+1. A tenant `chef` requests deletion of one patient. An active legal hold blocks
+   the request immediately.
+2. A different tenant `chef` approves or rejects. The requester cannot approve.
+   `platform_admin` is denied.
+3. The approving chef executes. The executor must differ from the requester.
+   An active legal hold blocks execution.
+4. Execution deletes in dependency order: billing runs, reports, report
+   activities, visits, activities, templates, assignments, search tokens,
+   break-glass grants, then the patient row.
+5. A row-count snapshot is stored in the append-only `deletion_register`.
+6. The request is marked executed. A second execution is a conflict.
+
+The register is append-only: the application role has `SELECT` and `INSERT`
+only, and row update, delete and truncate are blocked by triggers for every
+role.
+
 ## Gaps
 
-- No patient delete API or guided deletion procedure.
+- Patient deletion is implemented as the four-eyes workflow above.
 - Tenant deletion relies on cascades and may fail because of `RESTRICT` edges
   and the append-only audit trigger.
-- No automated deletion register.
+- The append-only `deletion_register` stores row counts for each executed deletion.
 - No automated way to delete a subject from backups.
 - Archived patients remain visible to `chef`; `archived` is not a restriction
   control.

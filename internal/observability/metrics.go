@@ -63,6 +63,8 @@ type Registry struct {
 	inFlight       atomic.Int64
 	loginFailures  atomic.Uint64
 	sessionsPurged atomic.Uint64
+	retentionRuns  atomic.Uint64
+	retentionCands atomic.Uint64
 	jobErrors      map[string]uint64
 
 	backupAgeSeconds atomic.Int64
@@ -111,6 +113,18 @@ func (r *Registry) IncSessionsPurged(count int) {
 		return
 	}
 	r.sessionsPurged.Add(uint64(count))
+}
+
+// IncRetentionReview records one completed retention review and the number of
+// candidate rows it reported. It records a count only, never a patient id.
+func (r *Registry) IncRetentionReview(candidates int) {
+	if r == nil {
+		return
+	}
+	r.retentionRuns.Add(1)
+	if candidates > 0 {
+		r.retentionCands.Add(uint64(candidates))
+	}
 }
 
 // IncJobError counts a failed background job.
@@ -359,6 +373,14 @@ func (r *Registry) Render() string {
 	b.WriteString("# HELP altserv_sessions_purged_total Expired and revoked sessions removed by the maintenance job.\n")
 	b.WriteString("# TYPE altserv_sessions_purged_total counter\n")
 	fmt.Fprintf(&b, "altserv_sessions_purged_total %d\n", r.sessionsPurged.Load())
+
+	b.WriteString("# HELP altserv_retention_reviews_total Completed retention reviews.\n")
+	b.WriteString("# TYPE altserv_retention_reviews_total counter\n")
+	fmt.Fprintf(&b, "altserv_retention_reviews_total %d\n", r.retentionRuns.Load())
+
+	b.WriteString("# HELP altserv_retention_review_candidates_total Retention review candidate rows reported.\n")
+	b.WriteString("# TYPE altserv_retention_review_candidates_total counter\n")
+	fmt.Fprintf(&b, "altserv_retention_review_candidates_total %d\n", r.retentionCands.Load())
 
 	b.WriteString("# HELP altserv_job_errors_total Failed background jobs.\n")
 	b.WriteString("# TYPE altserv_job_errors_total counter\n")

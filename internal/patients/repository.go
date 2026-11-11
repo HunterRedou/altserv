@@ -207,13 +207,14 @@ func (r *Repository) decrypt(row db.Patient) (Patient, error) {
 	}
 
 	return Patient{
-		ID:        row.ID,
-		TenantID:  row.TenantID,
-		FirstName: firstName,
-		LastName:  lastName,
-		BirthDate: birthDate,
-		Status:    row.Status,
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
+		ID:              row.ID,
+		TenantID:        row.TenantID,
+		FirstName:       firstName,
+		LastName:        lastName,
+		BirthDate:       birthDate,
+		Status:          row.Status,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+		StatusChangedAt: row.StatusChangedAt,
 	}, nil
 }

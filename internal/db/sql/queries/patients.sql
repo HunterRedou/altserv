@@ -1,9 +1,9 @@
 -- name: CreatePatient :one
 INSERT INTO patients (
   id, tenant_id, first_name_enc, last_name_enc, birth_date_enc,
-  status, key_version, created_at, updated_at
+  status, key_version, created_at, updated_at, status_changed_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp(), clock_timestamp())
 RETURNING *;
 
 -- name: GetPatient :one
@@ -38,8 +38,14 @@ SET first_name_enc = $3,
     last_name_enc = $4,
     birth_date_enc = $5,
     status = $6,
+    -- Only a real status transition starts a new end-of-care period. A normal
+    -- edit must not move the retention clock.
+    status_changed_at = CASE
+      WHEN status <> $6 THEN clock_timestamp()
+      ELSE status_changed_at
+    END,
     key_version = $7,
-    updated_at = NOW()
+    updated_at = clock_timestamp()
 WHERE id = $1
   AND tenant_id = $2
 RETURNING *;

@@ -136,6 +136,52 @@ type BreakGlassGrant struct {
 	UpdatedAt      time.Time
 }
 
+type DeletionRegister struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	DeletionRequestID uuid.UUID
+	PatientID         uuid.UUID
+	ExecutedBy        uuid.UUID
+	ExecutedAt        time.Time
+	RowCounts         json.RawMessage
+	CreatedAt         time.Time
+}
+
+type DeletionRequest struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	PatientID      uuid.UUID
+	Status         string
+	Reason         string
+	DecisionReason string
+	RequestedBy    uuid.UUID
+	RequestedAt    time.Time
+	DecidedBy      uuid.NullUUID
+	DecidedAt      sql.NullTime
+	CancelledBy    uuid.NullUUID
+	CancelledAt    sql.NullTime
+	ExecutedBy     uuid.NullUUID
+	ExecutedAt     sql.NullTime
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type LegalHold struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	PatientID   uuid.NullUUID
+	Status      string
+	Reason      string
+	LiftReason  string
+	DeclaredBy  uuid.UUID
+	DeclaredAt  time.Time
+	LiftedBy    uuid.NullUUID
+	LiftedAt    sql.NullTime
+	ReviewDueAt sql.NullTime
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type MfaChallenge struct {
 	TokenHash  []byte
 	TenantID   uuid.UUID
@@ -158,15 +204,16 @@ type PasswordResetToken struct {
 }
 
 type Patient struct {
-	ID           uuid.UUID
-	TenantID     uuid.UUID
-	FirstNameEnc []byte
-	LastNameEnc  []byte
-	BirthDateEnc []byte
-	Status       string
-	KeyVersion   int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	FirstNameEnc    []byte
+	LastNameEnc     []byte
+	BirthDateEnc    []byte
+	Status          string
+	KeyVersion      int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	StatusChangedAt time.Time
 }
 
 type PatientAssignment struct {
@@ -232,6 +279,21 @@ type ReportTransition struct {
 	ReasonEnc        []byte
 	ReasonKeyVersion sql.NullInt32
 	CreatedAt        time.Time
+}
+
+type RetentionPolicy struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	Category     string
+	TriggerEvent string
+	PeriodMonths int32
+	Status       string
+	Note         string
+	CreatedBy    uuid.UUID
+	ConfirmedBy  uuid.NullUUID
+	ConfirmedAt  sql.NullTime
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type ServiceCatalog struct {

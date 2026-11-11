@@ -12,6 +12,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
+	"github.com/HunterRedou/altserv/internal/retention"
 	"github.com/HunterRedou/altserv/internal/server"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
@@ -29,6 +30,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	reportHandler := cfg.reportHandler()
 	billingHandler := cfg.billingHandler()
 	breakGlassHandler := cfg.breakGlassHandler()
+	retentionHandler := cfg.retentionHandler()
 	auditHandler := cfg.auditHandler()
 
 	return server.NewRouter(server.Handlers{
@@ -116,6 +118,22 @@ func (cfg *apiConfig) routes() http.Handler {
 		BreakGlassDeny:          breakGlassHandler.Deny,
 		BreakGlassRevoke:        breakGlassHandler.Revoke,
 		BreakGlassPatient:       breakGlassHandler.Patient,
+		RetentionPolicyList:     retentionHandler.ListPolicies,
+		RetentionPolicyCreate:   retentionHandler.CreatePolicy,
+		RetentionPolicyUpdate:   retentionHandler.UpdatePolicy,
+		RetentionPolicyConfirm:  retentionHandler.ConfirmPolicy,
+		RetentionPolicyDisable:  retentionHandler.DisablePolicy,
+		RetentionReview:         retentionHandler.Review,
+		LegalHoldList:           retentionHandler.ListLegalHolds,
+		LegalHoldCreate:         retentionHandler.CreateLegalHold,
+		LegalHoldLift:           retentionHandler.LiftLegalHold,
+		DeletionRequestList:     retentionHandler.ListDeletionRequests,
+		DeletionRequestCreate:   retentionHandler.CreateDeletionRequest,
+		DeletionRequestApprove:  retentionHandler.ApproveDeletionRequest,
+		DeletionRequestReject:   retentionHandler.RejectDeletionRequest,
+		DeletionRequestCancel:   retentionHandler.CancelDeletionRequest,
+		DeletionRequestExecute:  retentionHandler.ExecuteDeletion,
+		DeletionRegisterList:    retentionHandler.ListRegister,
 		Auth:                    cfg.middlewareAuth,
 		CSRF:                    cfg.middlewareCSRF,
 		RequestID:               cfg.middlewareRequestID,
@@ -171,6 +189,10 @@ func (cfg *apiConfig) billingHandler() *billing.Handler {
 
 func (cfg *apiConfig) breakGlassHandler() *breakglass.Handler {
 	return breakglass.NewHandler(cfg.breakGlassService, cfg.withTenant, breakGlassActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) retentionHandler() *retention.Handler {
+	return retention.NewHandler(cfg.retentionService, cfg.withTenant, retentionActorFromContext, requestIDFromContext)
 }
 
 func (cfg *apiConfig) auditHandler() *audit.Handler {
@@ -280,6 +302,18 @@ func breakGlassActorFromContext(ctx context.Context) (breakglass.Actor, bool) {
 		return breakglass.Actor{}, false
 	}
 	return breakglass.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func retentionActorFromContext(ctx context.Context) (retention.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return retention.Actor{}, false
+	}
+	return retention.Actor{
 		UserID:   user.ID,
 		TenantID: user.TenantID,
 		Role:     user.Role,

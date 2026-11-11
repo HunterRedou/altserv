@@ -14,10 +14,10 @@ import (
 const createPatient = `-- name: CreatePatient :one
 INSERT INTO patients (
   id, tenant_id, first_name_enc, last_name_enc, birth_date_enc,
-  status, key_version, created_at, updated_at
+  status, key_version, created_at, updated_at, status_changed_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-RETURNING id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp(), clock_timestamp())
+RETURNING id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at, status_changed_at
 `
 
 type CreatePatientParams struct {
@@ -51,6 +51,7 @@ func (q *Queries) CreatePatient(ctx context.Context, arg CreatePatientParams) (P
 		&i.KeyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StatusChangedAt,
 	)
 	return i, err
 }
@@ -99,7 +100,7 @@ func (q *Queries) DeletePatientSearchTokens(ctx context.Context, arg DeletePatie
 }
 
 const getPatient = `-- name: GetPatient :one
-SELECT id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at FROM patients
+SELECT id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at, status_changed_at FROM patients
 WHERE id = $1
   AND tenant_id = $2
 `
@@ -122,12 +123,13 @@ func (q *Queries) GetPatient(ctx context.Context, arg GetPatientParams) (Patient
 		&i.KeyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StatusChangedAt,
 	)
 	return i, err
 }
 
 const listPatients = `-- name: ListPatients :many
-SELECT id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at FROM patients
+SELECT id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at, status_changed_at FROM patients
 WHERE tenant_id = $1
 ORDER BY created_at DESC
 `
@@ -151,6 +153,7 @@ func (q *Queries) ListPatients(ctx context.Context, tenantID uuid.UUID) ([]Patie
 			&i.KeyVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.StatusChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -166,7 +169,7 @@ func (q *Queries) ListPatients(ctx context.Context, tenantID uuid.UUID) ([]Patie
 }
 
 const listPatientsForEmployee = `-- name: ListPatientsForEmployee :many
-SELECT p.id, p.tenant_id, p.first_name_enc, p.last_name_enc, p.birth_date_enc, p.status, p.key_version, p.created_at, p.updated_at FROM patients p
+SELECT p.id, p.tenant_id, p.first_name_enc, p.last_name_enc, p.birth_date_enc, p.status, p.key_version, p.created_at, p.updated_at, p.status_changed_at FROM patients p
 WHERE p.tenant_id = $1
   AND p.status <> 'archived'
   AND EXISTS (
@@ -206,6 +209,7 @@ func (q *Queries) ListPatientsForEmployee(ctx context.Context, arg ListPatientsF
 			&i.KeyVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.StatusChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -221,7 +225,7 @@ func (q *Queries) ListPatientsForEmployee(ctx context.Context, arg ListPatientsF
 }
 
 const searchPatients = `-- name: SearchPatients :many
-SELECT p.id, p.tenant_id, p.first_name_enc, p.last_name_enc, p.birth_date_enc, p.status, p.key_version, p.created_at, p.updated_at FROM patients p
+SELECT p.id, p.tenant_id, p.first_name_enc, p.last_name_enc, p.birth_date_enc, p.status, p.key_version, p.created_at, p.updated_at, p.status_changed_at FROM patients p
 WHERE p.tenant_id = $1
   AND (
     $2::uuid = '00000000-0000-0000-0000-000000000000'::uuid
@@ -288,6 +292,7 @@ func (q *Queries) SearchPatients(ctx context.Context, arg SearchPatientsParams) 
 			&i.KeyVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.StatusChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -308,11 +313,17 @@ SET first_name_enc = $3,
     last_name_enc = $4,
     birth_date_enc = $5,
     status = $6,
+    -- Only a real status transition starts a new end-of-care period. A normal
+    -- edit must not move the retention clock.
+    status_changed_at = CASE
+      WHEN status <> $6 THEN clock_timestamp()
+      ELSE status_changed_at
+    END,
     key_version = $7,
-    updated_at = NOW()
+    updated_at = clock_timestamp()
 WHERE id = $1
   AND tenant_id = $2
-RETURNING id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at
+RETURNING id, tenant_id, first_name_enc, last_name_enc, birth_date_enc, status, key_version, created_at, updated_at, status_changed_at
 `
 
 type UpdatePatientParams struct {
@@ -346,6 +357,7 @@ func (q *Queries) UpdatePatient(ctx context.Context, arg UpdatePatientParams) (P
 		&i.KeyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StatusChangedAt,
 	)
 	return i, err
 }

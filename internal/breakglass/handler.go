@@ -57,14 +57,15 @@ type revokeRequest struct {
 }
 
 type patientResponse struct {
-	ID        uuid.UUID `json:"id"`
-	TenantID  uuid.UUID `json:"tenant_id"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	BirthDate string    `json:"birth_date"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	TenantID        uuid.UUID `json:"tenant_id"`
+	FirstName       string    `json:"first_name"`
+	LastName        string    `json:"last_name"`
+	BirthDate       string    `json:"birth_date"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	StatusChangedAt time.Time `json:"status_changed_at"`
 }
 
 // Request handles POST /api/break-glass/grants. Only a platform_admin may ask.
@@ -353,14 +354,15 @@ func decodeJSONBody(r *http.Request, target any, allowEmpty bool) error {
 
 func toPatientResponse(patient patients.Patient) patientResponse {
 	return patientResponse{
-		ID:        patient.ID,
-		TenantID:  patient.TenantID,
-		FirstName: patient.FirstName,
-		LastName:  patient.LastName,
-		BirthDate: patient.BirthDate.Format("2006-01-02"),
-		Status:    patient.Status,
-		CreatedAt: patient.CreatedAt,
-		UpdatedAt: patient.UpdatedAt,
+		ID:              patient.ID,
+		TenantID:        patient.TenantID,
+		FirstName:       patient.FirstName,
+		LastName:        patient.LastName,
+		BirthDate:       patient.BirthDate.Format("2006-01-02"),
+		Status:          patient.Status,
+		CreatedAt:       patient.CreatedAt,
+		UpdatedAt:       patient.UpdatedAt,
+		StatusChangedAt: patient.StatusChangedAt,
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/observability"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
+	"github.com/HunterRedou/altserv/internal/retention"
 	"github.com/HunterRedou/altserv/internal/server"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
@@ -47,6 +48,7 @@ type apiConfig struct {
 	reportService        *reports.Service
 	billingService       *billing.Service
 	breakGlassService    *breakglass.Service
+	retentionService     *retention.Service
 	loginLimiter         *loginRateLimiter
 	passwordResetLimiter *loginRateLimiter
 	mfaBox               *auth.SecretBox
@@ -110,6 +112,7 @@ func main() {
 	reportService := reports.NewService(reports.NewRepository(patientCipher), auditRecorder, assignmentService)
 	billingService := billing.NewService(billing.NewRepository(), auditRecorder)
 	breakGlassService := breakglass.NewService(breakglass.NewRepository(), auditRecorder, patientService)
+	retentionService := retention.NewService(retention.NewRepository(), auditRecorder)
 
 	apiCfg := apiConfig{
 		db:                   db.New(dbConn),
@@ -126,6 +129,7 @@ func main() {
 		reportService:        reportService,
 		billingService:       billingService,
 		breakGlassService:    breakGlassService,
+		retentionService:     retentionService,
 		loginLimiter:         newLoginRateLimiter(10, time.Minute),
 		passwordResetLimiter: newLoginRateLimiter(5, time.Minute),
 		mfaBox:               mfaBox,
@@ -143,6 +147,7 @@ func main() {
 	metrics.WatchBackupMarker(ctx, cfg.BackupMarkerFile, time.Minute)
 	observability.NewSlowQueryWatcher(dbConn, metrics, cfg.SlowQueryThreshold, 30*time.Second).Run(ctx)
 	go apiCfg.runSessionPurge(ctx, cfg.SessionPurgeInterval)
+	go apiCfg.runRetentionReview(ctx, cfg.RetentionReviewInterval)
 
 	srv := server.New(cfg.Addr(), apiCfg.routes())
 	log.Printf("Serving on %s", cfg.Addr())

@@ -56,13 +56,18 @@ supervision authority.
 | Capability | Status |
 | --- | --- |
 | Patient status `inactive` and `archived` | Implemented. It is not a deletion. |
-| Patient delete API | Not implemented. |
+| Retention policies | Implemented. Tenant-configured, disabled by default, confirmed by a tenant `chef`. No period is seeded; the controller must confirm it after professional review. |
+| Legal holds | Implemented. Tenant-bound, patient-scoped or tenant-wide. Active holds block deletion. |
+| Deletion requests | Implemented. Patient-scoped, four-eyes: one tenant `chef` requests, a different tenant `chef` approves and executes. `platform_admin` is denied. |
+| Deletion register | Implemented. Append-only evidence table with row counts. |
+| Retention review job | Implemented. Reports candidate counts only. Writes `retention.reviewed` audit events and metrics. Never deletes or creates deletion requests. |
+| Patient delete API | Implemented as the deletion-request workflow above. |
 | Tenant delete | Implemented as a database query, but it fails once the tenant has audit events because the append-only trigger blocks the cascade. It is used only when the USt-IdNr check fails, before care data exists, and it is not exposed as an API. |
 | Session expiry | Implemented. The `DeleteExpiredSessions` query exists but is not scheduled. |
-| Automated retention job | Not implemented. |
+| Automated retention job | Implemented for retention review. It reports candidates only. |
 | Audit log deletion | Blocked by append-only triggers. |
 | Backup expiry | Depends on the backup product and the operator. |
-| Deletion evidence | Not automated. The operator must keep a record. |
+| Deletion evidence | Automated via the append-only `deletion_register` table. |
 
 This means retention is currently a manual, documented procedure. The
 application does not enforce it. A production launch must not rely on a period
@@ -112,7 +117,7 @@ can survive up to 14 days in a backup. Document this in the privacy notice.
 - Record each deletion run: date, scope, row counts, operator, reason.
 - Do not record patient names in the deletion log.
 - Review the schedule at least annually and after a legal change.
-- Test one deletion in a staging copy before running it in production.
+- Test one deletion in a staging copy before running it in production.\n\n## Retention review job\n\nThe scheduled job runs `retention_review_candidates(NULL::uuid)` once at startup\nand then every `RETENTION_REVIEW_INTERVAL` (default 24h, minimum 1h, maximum\n7d). The function is `SECURITY DEFINER`. It writes one `retention.reviewed`\naudit event per tenant that has a confirmed policy, and it returns candidate\ncounts only. It never creates a deletion request and never deletes data. The\njob metrics are `altserv_retention_reviews_total` and\n`altserv_retention_review_candidates_total`.\n\nThe chef API `POST /api/retention/review` is scoped to the session tenant and\ncalls `retention_review_candidates($1::uuid)`. It returns counts only and never\nnames a patient.
 
 ## Open questions
 

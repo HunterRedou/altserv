@@ -100,7 +100,7 @@ Break-glass access is implemented as a patient-scoped, read-only flow:
 - A read needs an active grant and is audited in the same transaction. If the
   audit write fails, the read fails.
 
-See `../decisions/ADR-021-break-glass-access.md`.
+See `../decisions/ADR-021-break-glass-access.md`.\n\n## Retention and deletion\n\n- Every retention and deletion endpoint is chef-only. `platform_admin` and\n  `employee` are denied.\n- A tenant `chef` creates, updates, confirms, disables and lists retention\n  policies. A policy starts disabled; only an explicit confirmation enables it.\n  No retention period is seeded; the controller must confirm it after\n  professional review.\n- A tenant `chef` declares and lifts legal holds. A hold can be patient-scoped\n  or tenant-wide. Active holds block deletion.\n- Patient deletion needs four eyes: one tenant `chef` requests, a different\n  tenant `chef` approves and executes. The requester cannot approve or execute.\n  `platform_admin` is denied.\n- The retention review reports candidate counts only. It never creates a\n  deletion request and never deletes data.\n- The deletion register is append-only evidence. It stores row counts, not the\n  deleted personal data.\n- Audit metadata for retention and deletion never contains patient names,\n  free-text reasons, notes, legal-basis text or health data.
 
 A `platform_admin` is stored with a `tenant_id`, like every user. It must not be
 a member of a tenant that holds patient data. If it is, it can create a `chef`

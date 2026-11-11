@@ -55,14 +55,15 @@ type updateRequest struct {
 }
 
 type patientResponse struct {
-	ID        uuid.UUID `json:"id"`
-	TenantID  uuid.UUID `json:"tenant_id"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	BirthDate string    `json:"birth_date"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	TenantID        uuid.UUID `json:"tenant_id"`
+	FirstName       string    `json:"first_name"`
+	LastName        string    `json:"last_name"`
+	BirthDate       string    `json:"birth_date"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	StatusChangedAt time.Time `json:"status_changed_at"`
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -234,13 +235,14 @@ func respondPatientError(w http.ResponseWriter, err error) {
 
 func toResponse(patient Patient) patientResponse {
 	return patientResponse{
-		ID:        patient.ID,
-		TenantID:  patient.TenantID,
-		FirstName: patient.FirstName,
-		LastName:  patient.LastName,
-		BirthDate: patient.BirthDate.Format(dateLayout),
-		Status:    patient.Status,
-		CreatedAt: patient.CreatedAt,
-		UpdatedAt: patient.UpdatedAt,
+		ID:              patient.ID,
+		TenantID:        patient.TenantID,
+		FirstName:       patient.FirstName,
+		LastName:        patient.LastName,
+		BirthDate:       patient.BirthDate.Format(dateLayout),
+		Status:          patient.Status,
+		CreatedAt:       patient.CreatedAt,
+		UpdatedAt:       patient.UpdatedAt,
+		StatusChangedAt: patient.StatusChangedAt,
 	}
 }

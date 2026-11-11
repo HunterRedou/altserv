@@ -16,6 +16,9 @@ type Patient struct {
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// StatusChangedAt is the start of the end-of-care retention period. A
+	// normal edit does not move it.
+	StatusChangedAt time.Time `json:"status_changed_at"`
 }
 
 // CreateInput is the validated input for a new patient.

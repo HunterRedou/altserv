@@ -18,6 +18,9 @@ const (
 	defaultShutdownDrainDelay   = 5 * time.Second
 	defaultSlowQueryThreshold   = 1 * time.Second
 	defaultSessionPurgeInterval = time.Hour
+	// defaultRetentionReviewInterval is daily. The review only reports counts,
+	// so a long interval is enough and keeps the cross-tenant query cheap.
+	defaultRetentionReviewInterval = 24 * time.Hour
 )
 
 // Config is the runtime configuration loaded from environment variables.
@@ -68,6 +71,10 @@ type Config struct {
 	// SessionPurgeInterval controls the background purge of expired and
 	// revoked sessions and expired authentication tokens.
 	SessionPurgeInterval time.Duration
+
+	// RetentionReviewInterval controls the background retention review. The
+	// job reports candidate counts only; it never deletes data.
+	RetentionReviewInterval time.Duration
 }
 
 // Load reads the environment, applies defaults and validates the result.
@@ -92,6 +99,7 @@ func Load() (Config, error) {
 		PatientSearchKeyVersion: defaultKeyVersion,
 		MFAKeyVersion:           defaultKeyVersion,
 		SessionPurgeInterval:    defaultSessionPurgeInterval,
+		RetentionReviewInterval: defaultRetentionReviewInterval,
 	}
 
 	if raw := os.Getenv("SESSION_DURATION"); raw != "" {
@@ -196,6 +204,14 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("SESSION_PURGE_INTERVAL: %w", err)
 		}
 		cfg.SessionPurgeInterval = duration
+	}
+
+	if raw := os.Getenv("RETENTION_REVIEW_INTERVAL"); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("RETENTION_REVIEW_INTERVAL: %w", err)
+		}
+		cfg.RetentionReviewInterval = duration
 	}
 
 	if err := cfg.validate(); err != nil {

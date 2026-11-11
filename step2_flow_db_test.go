@@ -14,6 +14,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/observability"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -489,6 +490,58 @@ func TestAuthenticationHardening(t *testing.T) {
 		decodeJSON(t, rec, &resp)
 		if !resp.MFAEnrollmentRequired {
 			t.Fatal("promoted account was not forced to enroll MFA")
+		}
+
+		// The promotion is complete without platform_admin involvement: the
+		// tenant chef alone promoted the employee. Once the promoted chef has
+		// enrolled MFA, the account can act as the second, independent chef on
+		// a patient deletion request.
+		patientID := createPatientViaAPI(t, handler, chefLogin, "Promoted", "Approver")
+		requestBody := fmt.Sprintf(`{"patient_id":%q,"reason":"Patient asked for erasure"}`, patientID)
+		rec = doRequest(handler, http.MethodPost, "/api/deletion-requests", requestBody, chefLogin.cookie, chefLogin.csrf)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create deletion request status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		var deletionRequest struct {
+			ID          uuid.UUID `json:"id"`
+			Status      string    `json:"status"`
+			RequestedBy uuid.UUID `json:"requested_by"`
+		}
+		decodeJSON(t, rec, &deletionRequest)
+		if deletionRequest.Status != "pending" || deletionRequest.RequestedBy != chef.ID {
+			t.Fatalf("deletion request = %+v", deletionRequest)
+		}
+
+		box, err := auth.NewSecretBox(testMFAKey(), 1)
+		if err != nil {
+			t.Fatalf("NewSecretBox: %v", err)
+		}
+		encrypted, err := box.Encrypt(testTOTPSecret(employee.Email), auth.MFAFieldAAD(tenant.ID, employee.ID, 1))
+		if err != nil {
+			t.Fatalf("encrypt promoted MFA secret: %v", err)
+		}
+		if _, err := queries.EnableUserMFA(context.Background(), db.EnableUserMFAParams{
+			ID:                  employee.ID,
+			TenantID:            tenant.ID,
+			MfaSecretEnc:        encrypted,
+			MfaSecretKeyVersion: sql.NullInt32{Int32: 1, Valid: true},
+		}); err != nil {
+			t.Fatalf("enable promoted MFA: %v", err)
+		}
+		promotedLogin := loginAs(t, handler, employee.Email, "secret")
+
+		approvePath := "/api/deletion-requests/" + deletionRequest.ID.String() + "/approve"
+		rec = doRequest(handler, http.MethodPost, approvePath, `{}`, promotedLogin.cookie, promotedLogin.csrf)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("promoted chef approve status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		var approved struct {
+			Status    string    `json:"status"`
+			DecidedBy uuid.UUID `json:"decided_by"`
+		}
+		decodeJSON(t, rec, &approved)
+		if approved.Status != "approved" || approved.DecidedBy != employee.ID {
+			t.Fatalf("promoted chef approval = %+v, want approved by %s", approved, employee.ID)
 		}
 	})
 

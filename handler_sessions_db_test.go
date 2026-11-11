@@ -25,6 +25,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
+	"github.com/HunterRedou/altserv/internal/retention"
 	"github.com/HunterRedou/altserv/internal/templates"
 	"github.com/HunterRedou/altserv/internal/visits"
 	"github.com/google/uuid"
@@ -331,6 +332,7 @@ func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Querie
 	billingService := billing.NewService(billing.NewRepository(), recorder)
 	patientService := patients.NewServiceWithSearch(patients.NewRepository(cipher), recorder, assignmentService, searchIndexer)
 	breakGlassService := breakglass.NewService(breakglass.NewRepository(), recorder, patientService)
+	retentionService := retention.NewService(retention.NewRepository(), recorder)
 	mfaBox, err := auth.NewSecretBox(testMFAKey(), 1)
 	if err != nil {
 		t.Fatalf("NewSecretBox: %v", err)
@@ -350,6 +352,7 @@ func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Querie
 		reportService:     reportService,
 		billingService:    billingService,
 		breakGlassService: breakGlassService,
+		retentionService:  retentionService,
 		tenantRunner: func(ctx context.Context, tenantID uuid.UUID, fn func(*db.Queries) error) error {
 			return db.WithTenantTx(ctx, tx, tenantID, fn)
 		},
