@@ -632,11 +632,11 @@ See `docs/decisions/ADR-021-break-glass-access.md`.
 ### Recent commits
 
 ```
+a25b684 Add tenant-approved break-glass access for platform admins
+c9208a3 Add MFA, password reset, user disable, and session purge
 0a008cf Add GDPR compliance documentation and legal review checklists
 7b8d87d Add health checks, metrics, deployment assets, and operations runbooks
 8bb64bc Add restricted audit reads, role-change auditing, and audit hardening
-333ce21 Add reports, approvals, and billing assistant features
-d80f276 Add tenant, patient, catalog, template, and visit features
 ```
 
 ### Verification
