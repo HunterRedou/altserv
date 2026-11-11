@@ -5,14 +5,16 @@ import "net/http"
 // Handlers is the set of HTTP handlers the router wires together.
 // It keeps the server package independent of the main package.
 type Handlers struct {
-	App    http.Handler
-	Reset  http.HandlerFunc
-	Login  http.HandlerFunc
-	Logout http.HandlerFunc
-	Me     http.HandlerFunc
-	Users  http.HandlerFunc
-	Create http.HandlerFunc
-	Tenant http.HandlerFunc
+	App            http.Handler
+	Reset          http.HandlerFunc
+	Login          http.HandlerFunc
+	Logout         http.HandlerFunc
+	Me             http.HandlerFunc
+	Users          http.HandlerFunc
+	Create         http.HandlerFunc
+	UserUpdateRole http.HandlerFunc
+	AuditEvents    http.HandlerFunc
+	Tenant         http.HandlerFunc
 
 	PatientCreate http.HandlerFunc
 	PatientList   http.HandlerFunc
@@ -102,6 +104,8 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteMe, protected(h.Me))
 	mux.Handle(RouteUsers, protected(h.Users))
 	mux.Handle(RouteCreateUser, protected(h.Create))
+	mux.Handle(RouteUpdateUserRole, protected(h.UserUpdateRole))
+	mux.Handle(RouteAuditEvents, protected(h.AuditEvents))
 	mux.Handle(RoutePatients, protected(h.PatientList))
 	mux.Handle(RouteCreatePatient, protected(h.PatientCreate))
 	mux.Handle(RoutePatient, protected(h.PatientGet))

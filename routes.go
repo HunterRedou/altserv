@@ -6,6 +6,7 @@ import (
 
 	"github.com/HunterRedou/altserv/internal/activities"
 	"github.com/HunterRedou/altserv/internal/assignments"
+	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/billing"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/patients"
@@ -26,6 +27,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	visitHandler := cfg.visitHandler()
 	reportHandler := cfg.reportHandler()
 	billingHandler := cfg.billingHandler()
+	auditHandler := cfg.auditHandler()
 
 	return server.NewRouter(server.Handlers{
 		App:                     cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))),
@@ -36,6 +38,8 @@ func (cfg *apiConfig) routes() http.Handler {
 		Me:                      cfg.handlerMe,
 		Users:                   cfg.handlerGetUsers,
 		Create:                  cfg.handlerUser,
+		UserUpdateRole:          cfg.handlerUpdateUserRole,
+		AuditEvents:             auditHandler.List,
 		PatientCreate:           patientHandler.Create,
 		PatientList:             patientHandler.List,
 		PatientGet:              patientHandler.Get,
@@ -142,6 +146,11 @@ func (cfg *apiConfig) billingHandler() *billing.Handler {
 	return billing.NewHandler(cfg.billingService, cfg.withTenant, billingActorFromContext, requestIDFromContext)
 }
 
+func (cfg *apiConfig) auditHandler() *audit.Handler {
+	service := audit.NewService(audit.NewRepository(), cfg.auditRecorder)
+	return audit.NewHandler(service, cfg.withTenant, auditActorFromContext, requestIDFromContext)
+}
+
 func actorFromContext(ctx context.Context) (patients.Actor, bool) {
 	user, ok := authUserFromContext(ctx)
 	if !ok {
@@ -232,6 +241,18 @@ func billingActorFromContext(ctx context.Context) (billing.Actor, bool) {
 		return billing.Actor{}, false
 	}
 	return billing.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func auditActorFromContext(ctx context.Context) (audit.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return audit.Actor{}, false
+	}
+	return audit.Actor{
 		UserID:   user.ID,
 		TenantID: user.TenantID,
 		Role:     user.Role,

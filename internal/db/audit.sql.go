@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	"github.com/google/uuid"
@@ -53,4 +54,68 @@ func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventPara
 		&i.Metadata,
 	)
 	return i, err
+}
+
+const listAuditEvents = `-- name: ListAuditEvents :many
+SELECT id, tenant_id, actor_user_id, action, entity_type, entity_id, occurred_at, request_id, metadata
+FROM audit_events
+WHERE tenant_id = $1
+  AND ($2::text = '' OR action = $2::text)
+  AND ($3::text = '' OR entity_type = $3::text)
+  AND ($4::uuid IS NULL OR entity_id = $4::uuid)
+  AND ($5::timestamptz IS NULL OR occurred_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR occurred_at < $6::timestamptz)
+ORDER BY occurred_at DESC, id DESC
+LIMIT $7
+`
+
+type ListAuditEventsParams struct {
+	TenantID   uuid.UUID
+	Action     string
+	EntityType string
+	EntityID   uuid.NullUUID
+	FromTime   sql.NullTime
+	ToTime     sql.NullTime
+	RowLimit   int32
+}
+
+func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditEvents,
+		arg.TenantID,
+		arg.Action,
+		arg.EntityType,
+		arg.EntityID,
+		arg.FromTime,
+		arg.ToTime,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditEvent
+	for rows.Next() {
+		var i AuditEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ActorUserID,
+			&i.Action,
+			&i.EntityType,
+			&i.EntityID,
+			&i.OccurredAt,
+			&i.RequestID,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

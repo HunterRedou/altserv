@@ -11,3 +11,16 @@ VALUES (
   $5
 )
 RETURNING *;
+
+-- name: UpdateUserRole :one
+UPDATE users
+SET role = $3,
+    updated_at = NOW()
+WHERE id = $1
+  AND tenant_id = $2
+RETURNING *;
+
+-- name: CountChefsByTenant :one
+SELECT count(*) FROM users
+WHERE tenant_id = $1
+  AND role = 'chef';

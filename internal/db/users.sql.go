@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const countChefsByTenant = `-- name: CountChefsByTenant :one
+SELECT count(*) FROM users
+WHERE tenant_id = $1
+  AND role = 'chef'
+`
+
+func (q *Queries) CountChefsByTenant(ctx context.Context, tenantID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countChefsByTenant, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, name, role, hashed_password, email, tenant_id)
 VALUES (
@@ -42,6 +55,37 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Email,
 		arg.TenantID,
 	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.HashedPassword,
+		&i.Email,
+		&i.TenantID,
+		&i.Role,
+	)
+	return i, err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE users
+SET role = $3,
+    updated_at = NOW()
+WHERE id = $1
+  AND tenant_id = $2
+RETURNING id, created_at, updated_at, name, hashed_password, email, tenant_id, role
+`
+
+type UpdateUserRoleParams struct {
+	ID       uuid.UUID
+	TenantID uuid.UUID
+	Role     string
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserRole, arg.ID, arg.TenantID, arg.Role)
 	var i User
 	err := row.Scan(
 		&i.ID,

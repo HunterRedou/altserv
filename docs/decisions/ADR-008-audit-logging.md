@@ -40,6 +40,9 @@ must never contain patient names, free text or other unnecessary health data.
   the append-only trigger.
 - Retention, export and legal deletion rules need an explicit policy.
 
+ADR-018 extends this decision with the restricted read API, role-change
+auditing, TRUNCATE protection and the retention policy.
+
 ## Risks
 - Audit writes add latency and storage growth.
 - A compromised application process can still write false events; only
