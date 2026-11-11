@@ -96,4 +96,11 @@ const (
 	RouteBillingRules      = "GET /api/billing-rules"
 	RouteCreateBillingRule = "POST /api/billing-rules"
 	RouteBillingTransmit   = "GET /api/billing-transmission"
+
+	RouteBreakGlassGrants       = "GET /api/break-glass/grants"
+	RouteCreateBreakGlassGrant  = "POST /api/break-glass/grants"
+	RouteApproveBreakGlassGrant = "POST /api/break-glass/grants/{id}/approve"
+	RouteDenyBreakGlassGrant    = "POST /api/break-glass/grants/{id}/deny"
+	RouteRevokeBreakGlassGrant  = "POST /api/break-glass/grants/{id}/revoke"
+	RouteBreakGlassPatient      = "GET /api/break-glass/grants/{id}/patient"
 )

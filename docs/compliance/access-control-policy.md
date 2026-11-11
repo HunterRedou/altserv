@@ -22,7 +22,7 @@ production. It is not legal advice.
 
 | Role | Scope | Can do | Cannot do |
 | --- | --- | --- | --- |
-| `platform_admin` | Platform, but stored inside one tenant | Create users and assign any role inside its own tenant. | Read patient health data by default. No automatic patient access. No cross-tenant user API. |
+| `platform_admin` | Platform, but stored inside one tenant | Create users and assign any role inside its own tenant. Request a named-patient break-glass grant that a tenant `chef` must approve. | Read patient health data by default. No automatic patient access. No tenant-wide grant. No cross-tenant user API. |
 | `chef` | One tenant | Manage users, patients, assignments, contracts, templates, visits, reports, billing rules, billing runs, and read the audit log. | Cross tenant boundaries. Create or promote a `platform_admin`. |
 | `employee` | One tenant, assigned patients | Read assigned patients, manage templates for assigned patients, start and complete assigned visits, create and submit reports, read reports. | Manage users, patients, assignments, contracts, billing or audit. Access a patient without a valid assignment. |
 
@@ -55,7 +55,7 @@ Role changes:
 | --- | --- |
 | `chef` | All patients in the own tenant. |
 | `employee` | Only a patient with an assignment that is not revoked and whose validity contains `clock_timestamp()`. |
-| `platform_admin` | Denied. |
+| `platform_admin` | Denied, except one named patient under an active, tenant-approved break-glass grant. |
 
 The validity check uses `clock_timestamp()`, not `NOW()`, so a long transaction
 cannot use a stale time. The check is in the service layer and is backed by the
@@ -73,17 +73,34 @@ assignments. This prevents an employee from granting themselves a patient.
 - No silent impersonation.
 - Support access to tenant data requires an explicit instruction from the
   tenant and a documented legal basis.
-- Future break-glass access must be:
-  - requested for a named tenant and a named purpose
-  - approved by the tenant or by an on-call policy
-  - time-limited, for example 60 minutes
-  - read-only where possible
-  - audited with the actor, tenant, reason and expiry
-  - reviewed after use
 
-Break-glass is not implemented. Until it is, support must work with the tenant
-on a screen share or with a tenant-provided export. Do not add a hidden
-superuser path.
+### Break-glass access
+
+Break-glass access is implemented as a patient-scoped, read-only flow:
+
+- A `platform_admin` requests one named patient in one named tenant. The request
+  includes a reason. There is no tenant-wide grant.
+- A `chef` of the patient's tenant approves or denies the request. A requester
+  cannot approve their own grant. An `employee` cannot decide.
+- Approval lasts 1 to 60 minutes. The default is 30 minutes.
+- The only data route is `GET /api/break-glass/grants/{id}/patient`. It returns
+  the patient record and nothing else. There is no write path.
+- The requester or a chef of the patient's tenant can revoke a pending or
+  approved grant. Revocation is immediate.
+- The active check uses `clock_timestamp()`, so a long transaction cannot use a
+  stale time.
+- The grant row belongs to the patient's tenant and has row-level security. The
+  requester may belong to another tenant, so it must pass `tenant_id`
+  explicitly.
+- Every request, decision, revocation, list and read is audited in the patient's
+  tenant. The free-text reason is stored in the grant row, not in audit
+  metadata.
+- A forbidden attempt writes `access.denied`. The denial row is committed before
+  the API returns `403`.
+- A read needs an active grant and is audited in the same transaction. If the
+  audit write fails, the read fails.
+
+See `../decisions/ADR-021-break-glass-access.md`.
 
 A `platform_admin` is stored with a `tenant_id`, like every user. It must not be
 a member of a tenant that holds patient data. If it is, it can create a `chef`
@@ -244,6 +261,7 @@ The following actions are audited:
 - MFA enrollment, MFA enabled, MFA disabled and recovery-code regeneration
 - password reset requested, issued and completed
 - session purge
+- break-glass request, approval, denial, revocation, list and patient read
 - audit log read
 - denied access
 
@@ -252,7 +270,9 @@ Entity ids are allowed.
 
 ## Gaps
 
-- No break-glass access.
+- No tenant-wide break-glass grant and no support UI. One grant covers one named
+  patient, so an incident that spans many patients needs one request per
+  patient.
 - No shared rate-limit store.
 - No automated access review.
 - No external append-only audit sink.

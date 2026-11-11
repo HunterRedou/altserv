@@ -204,7 +204,7 @@ that the tenant handles. See `billing-requirements.md`.
 | Recipients | Support staff |
 | Third-country transfer | None intended |
 | Retention | Support ticket per the operator's retention policy |
-| Security | `platform_admin` has no automatic patient access. Future break-glass access must be explicit, time-limited and audited. |
+| Security | `platform_admin` has no automatic patient access. Break-glass access is patient-scoped, approved by a tenant `chef`, time-limited, read-only and audited. |
 
 ## Recipients and subprocessors
 

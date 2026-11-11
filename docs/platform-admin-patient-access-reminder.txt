@@ -6,14 +6,35 @@ Decision for now (agreed during Step 6):
 - Patient access is allowed only for:
   * chef: all patients in the chef's own tenant
   * employee: only patients with a currently valid, non-revoked assignment
-- platform_admin may manage tenants and users, but not patient data.
+  * platform_admin: only one named patient under an active, tenant-approved
+    break-glass grant
+- platform_admin may manage tenants and users, but not patient data by default.
 
 Why:
 - doc 4: "Plattform-Admin erhaelt nicht automatisch Zugriff auf Gesundheitsdaten."
 
+Break-glass access (Step 3):
+- Implemented in migration 023_break_glass.sql and internal/breakglass.
+- A platform_admin requests one named patient in one named tenant with a reason.
+- A chef of that tenant approves for 1 to 60 minutes, or denies.
+- The requester or the tenant chef can revoke at any time.
+- The only data route is read-only: GET /api/break-glass/grants/{id}/patient.
+- The grant row belongs to the patient's tenant. RLS applies.
+- Every request, decision, revocation, list and read is audited in that tenant.
+- The free-text reason stays in the grant row. It is not copied to audit
+  metadata.
+- There is no tenant-wide grant and no hidden superuser path.
+
 Review this decision later:
-- If support or incident response needs cross-tenant patient access, add an explicit
-  break-glass flow with a reason, time limit, and audit event.
+- Check the support verification process: who confirms the ticket before a chef
+  approves?
+- Check the grant review process: are open grants monitored and closed?
+- Check the retention rule for break-glass evidence after a patient or tenant is
+  deleted.
 - Do not weaken the default rule for all platform admins.
 - Check this file when platform-admin features, support tooling, or cross-tenant
   reporting are implemented.
+
+See:
+- docs/decisions/ADR-021-break-glass-access.md
+- docs/compliance/access-control-policy.md

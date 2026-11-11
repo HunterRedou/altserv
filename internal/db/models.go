@@ -119,6 +119,23 @@ type BillingRun struct {
 	UpdatedAt   time.Time
 }
 
+type BreakGlassGrant struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	PatientID      uuid.UUID
+	RequestedBy    uuid.UUID
+	DecidedBy      uuid.NullUUID
+	Status         string
+	Reason         string
+	DecisionReason string
+	RequestedAt    time.Time
+	DecidedAt      sql.NullTime
+	ExpiresAt      sql.NullTime
+	RevokedAt      sql.NullTime
+	LastUsedAt     sql.NullTime
+	UpdatedAt      time.Time
+}
+
 type MfaChallenge struct {
 	TokenHash  []byte
 	TenantID   uuid.UUID

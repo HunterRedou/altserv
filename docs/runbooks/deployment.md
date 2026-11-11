@@ -72,6 +72,18 @@ report or billing transaction.
 - A password reset token is returned to the issuer. No email is sent. Hand the
   token over out of band.
 
+## Break-glass after deploy
+- The migration `internal/db/sql/schema/023_break_glass.sql` adds the
+  `break_glass_grants` table. It needs no new secret.
+- A `platform_admin` must name the target tenant and patient. Support must know
+  both before a request.
+- A `chef` of the target tenant must approve. Define an on-call `chef` for out
+  of hours.
+- Grants last 1 to 60 minutes. The default is 30 minutes.
+- A grant is read-only. Do not add a write route.
+- Monitor `break_glass.*` audit events and review open grants. Revoke a grant as
+  soon as the support case ends.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz

@@ -51,6 +51,7 @@ Design decisions are in `../decisions/`. The most relevant are:
 - ADR-017: billing assistant
 - ADR-019: deployment and observability
 - ADR-020: authentication hardening
+- ADR-021: break-glass access
 
 ## Role summary
 
@@ -60,9 +61,9 @@ Design decisions are in `../decisions/`. The most relevant are:
   for its own contract and account data.
 - **Subprocessors** need an Art. 28 agreement and a place in the processing
   record.
-- **`platform_admin`** has no automatic patient access. Break-glass access is
-  not implemented. If it is added, it must be explicit, time-limited and
-  audited.
+- **`platform_admin`** has no automatic patient access. A named patient can be
+  read only under a tenant-approved, time-limited, read-only break-glass grant.
+  Every step is audited.
 
 The exact allocation, including possible joint controllership, must be fixed in
 the contract.
@@ -92,6 +93,9 @@ the contract.
       still enrol every privileged account and store recovery codes safely.
 - [x] Password reset and user-disable actions are implemented.
 - [x] Session purge is scheduled at startup and on an interval.
+- [x] Break-glass access for `platform_admin` is patient-scoped, approved by a
+      tenant `chef`, time-limited, read-only and audited. The operator must
+      still define the support verification process.
 - [ ] Production secrets in a secret manager, not in `.env` on a server.
 - [ ] TLS termination and HSTS verified.
 - [ ] Backup encryption and restore drill verified.
@@ -115,7 +119,8 @@ the contract.
 
 These are real gaps in the current implementation, not open design questions:
 
-1. No break-glass access for `platform_admin`.
+1. No tenant-wide break-glass grant and no support UI. One grant covers one
+   named patient.
 2. No email delivery for password reset or MFA changes. Reset tokens are handed
    over out of band.
 3. No automated retention or deletion job, and no patient delete API.

@@ -8,6 +8,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/assignments"
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/billing"
+	"github.com/HunterRedou/altserv/internal/breakglass"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
@@ -27,6 +28,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	visitHandler := cfg.visitHandler()
 	reportHandler := cfg.reportHandler()
 	billingHandler := cfg.billingHandler()
+	breakGlassHandler := cfg.breakGlassHandler()
 	auditHandler := cfg.auditHandler()
 
 	return server.NewRouter(server.Handlers{
@@ -108,6 +110,12 @@ func (cfg *apiConfig) routes() http.Handler {
 		BillingRuleList:         billingHandler.ListRules,
 		BillingRuleCreate:       billingHandler.CreateRule,
 		BillingTransmission:     billingHandler.Transmission,
+		BreakGlassList:          breakGlassHandler.List,
+		BreakGlassRequest:       breakGlassHandler.Request,
+		BreakGlassApprove:       breakGlassHandler.Approve,
+		BreakGlassDeny:          breakGlassHandler.Deny,
+		BreakGlassRevoke:        breakGlassHandler.Revoke,
+		BreakGlassPatient:       breakGlassHandler.Patient,
 		Auth:                    cfg.middlewareAuth,
 		CSRF:                    cfg.middlewareCSRF,
 		RequestID:               cfg.middlewareRequestID,
@@ -159,6 +167,10 @@ func (cfg *apiConfig) reportHandler() *reports.Handler {
 
 func (cfg *apiConfig) billingHandler() *billing.Handler {
 	return billing.NewHandler(cfg.billingService, cfg.withTenant, billingActorFromContext, requestIDFromContext)
+}
+
+func (cfg *apiConfig) breakGlassHandler() *breakglass.Handler {
+	return breakglass.NewHandler(cfg.breakGlassService, cfg.withTenant, breakGlassActorFromContext, requestIDFromContext)
 }
 
 func (cfg *apiConfig) auditHandler() *audit.Handler {
@@ -256,6 +268,18 @@ func billingActorFromContext(ctx context.Context) (billing.Actor, bool) {
 		return billing.Actor{}, false
 	}
 	return billing.Actor{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Role:     user.Role,
+	}, true
+}
+
+func breakGlassActorFromContext(ctx context.Context) (breakglass.Actor, bool) {
+	user, ok := authUserFromContext(ctx)
+	if !ok {
+		return breakglass.Actor{}, false
+	}
+	return breakglass.Actor{
 		UserID:   user.ID,
 		TenantID: user.TenantID,
 		Role:     user.Role,

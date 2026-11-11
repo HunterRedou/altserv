@@ -138,6 +138,14 @@ func (s *Service) Get(ctx context.Context, q *db.Queries, actor Actor, requestID
 	return patient, nil
 }
 
+// GetForSupport returns one patient without the normal role check. It exists
+// only for the break-glass read path. The caller must have validated an active
+// grant and must write the break_glass.patient_read audit event in the same
+// transaction. Do not call this from a normal API handler.
+func (s *Service) GetForSupport(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID) (Patient, error) {
+	return s.store.Get(ctx, q, tenantID, id)
+}
+
 func (s *Service) List(ctx context.Context, q *db.Queries, actor Actor, requestID string) ([]Patient, error) {
 	switch actor.Role {
 	case "chef":

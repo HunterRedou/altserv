@@ -15,6 +15,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/billing"
+	"github.com/HunterRedou/altserv/internal/breakglass"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/config"
 	"github.com/HunterRedou/altserv/internal/db"
@@ -45,6 +46,7 @@ type apiConfig struct {
 	visitService         *visits.Service
 	reportService        *reports.Service
 	billingService       *billing.Service
+	breakGlassService    *breakglass.Service
 	loginLimiter         *loginRateLimiter
 	passwordResetLimiter *loginRateLimiter
 	mfaBox               *auth.SecretBox
@@ -107,6 +109,7 @@ func main() {
 	visitService := visits.NewService(visits.NewRepository(), auditRecorder, assignmentService)
 	reportService := reports.NewService(reports.NewRepository(patientCipher), auditRecorder, assignmentService)
 	billingService := billing.NewService(billing.NewRepository(), auditRecorder)
+	breakGlassService := breakglass.NewService(breakglass.NewRepository(), auditRecorder, patientService)
 
 	apiCfg := apiConfig{
 		db:                   db.New(dbConn),
@@ -122,6 +125,7 @@ func main() {
 		visitService:         visitService,
 		reportService:        reportService,
 		billingService:       billingService,
+		breakGlassService:    breakGlassService,
 		loginLimiter:         newLoginRateLimiter(10, time.Minute),
 		passwordResetLimiter: newLoginRateLimiter(5, time.Minute),
 		mfaBox:               mfaBox,

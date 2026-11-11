@@ -20,6 +20,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/billing"
+	"github.com/HunterRedou/altserv/internal/breakglass"
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/HunterRedou/altserv/internal/patients"
@@ -328,6 +329,8 @@ func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Querie
 	visitService := visits.NewService(visits.NewRepository(), recorder, assignmentService)
 	reportService := reports.NewService(reports.NewRepository(cipher), recorder, assignmentService)
 	billingService := billing.NewService(billing.NewRepository(), recorder)
+	patientService := patients.NewServiceWithSearch(patients.NewRepository(cipher), recorder, assignmentService, searchIndexer)
+	breakGlassService := breakglass.NewService(breakglass.NewRepository(), recorder, patientService)
 	mfaBox, err := auth.NewSecretBox(testMFAKey(), 1)
 	if err != nil {
 		t.Fatalf("NewSecretBox: %v", err)
@@ -338,7 +341,7 @@ func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Querie
 		platform:          "test",
 		mfaBox:            mfaBox,
 		auditRecorder:     recorder,
-		patientService:    patients.NewServiceWithSearch(patients.NewRepository(cipher), recorder, assignmentService, searchIndexer),
+		patientService:    patientService,
 		assignmentService: assignmentService,
 		catalogService:    catalogService,
 		activityService:   activityService,
@@ -346,6 +349,7 @@ func newSessionTestAPIConfig(t *testing.T, conn *sql.DB) (*apiConfig, *db.Querie
 		visitService:      visitService,
 		reportService:     reportService,
 		billingService:    billingService,
+		breakGlassService: breakGlassService,
 		tenantRunner: func(ctx context.Context, tenantID uuid.UUID, fn func(*db.Queries) error) error {
 			return db.WithTenantTx(ctx, tx, tenantID, fn)
 		},

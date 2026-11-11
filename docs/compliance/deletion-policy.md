@@ -38,6 +38,7 @@ is not legal advice.
 | Report | No delete API | Not implemented | Corrections keep the transition history. |
 | Billing run | Void | Implemented | Voiding deletes lines and findings but keeps the run row. |
 | Billing line and finding | Cascades from a voided run | Implemented | Activities become billable again. |
+| Break-glass grant | Revoke, not delete | Implemented | Tenant-bound and kept as decision evidence. A grant cascades away with its patient or tenant. |
 | Audit event | Not deletable | Append-only triggers and revoked privileges | Tenant deletion cascades audit rows. |
 | User | No delete API | Not implemented | Disable and revoke sessions instead. Records reference the user with `RESTRICT`. |
 | Tenant | Database query only | `DeleteTenant` exists | Not exposed as an API. Used on a failed USt-IdNr check. Fails once the tenant has audit events. |
@@ -71,8 +72,10 @@ The schema uses `ON DELETE CASCADE` for most child rows, but several edges are
 - `activities.created_by` -> `users`
 - `billing_runs.generated_by`, `approved_by`, `voided_by` -> `users`
 
-A patient with an approved billing run therefore cannot simply be deleted. A
-safe order is:
+A patient with an approved billing run therefore cannot simply be deleted.
+Break-glass grants are an exception: they cascade with the patient. If the
+contract requires the grant evidence to survive, export it before the patient is
+deleted. A safe order is:
 
 1. Void or remove the billing runs for the patient's reports, so billing lines
    no longer reference report activities.
@@ -201,6 +204,8 @@ A deletion is complete only when:
 - No automated way to delete a subject from backups.
 - Archived patients remain visible to `chef`; `archived` is not a restriction
   control.
+- Break-glass grants cascade away with a deleted patient, so the evidence that
+  support access was approved can be lost.
 
 ## Open questions
 

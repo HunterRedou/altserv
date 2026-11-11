@@ -16,7 +16,8 @@ sentences use the active voice.
 The diagrams are ASCII. They render in any editor and in any Markdown viewer.
 
 The most recent feature deliverables are Points 13, 14 and 15 plus the Step 2
-authentication hardening. They are summarized in the project status.
+authentication hardening and the Step 3 break-glass access. They are summarized
+in the project status.
 
 ---
 
@@ -450,8 +451,9 @@ patient and employee data
 - Data minimisation: the tenant must train staff on free-text notes.
 - Retention and deletion need an owner and an execution procedure. The
   application does not run an automated retention job yet.
-- `platform_admin` has no automatic patient access. Future break-glass access
-  must be explicit, time-limited and audited.
+- `platform_admin` has no automatic patient access. Break-glass access is
+  patient-scoped, approved by a tenant `chef`, time-limited, read-only and
+  audited.
 - A personal data breach follows the 72-hour path. The processor notifies the
   controller without undue delay.
 - Backups are personal data. They need encryption, access control and a
@@ -547,6 +549,64 @@ See `docs/decisions/ADR-020-authentication-hardening.md`.
 
 ---
 
+## Break-glass access (Step 3)
+
+### What it does
+
+Step 3 adds a controlled support path for a `platform_admin`. A
+`platform_admin` still has no automatic patient access. A support person can
+read one named patient only after a `chef` of the patient's tenant approves a
+short window.
+
+### Flow
+
+```
+platform_admin                        tenant chef
+     |                                     |
+     | request tenant + patient + reason   |
+     +--------------> pending ------------>|
+     |                                     |
+     |                            approve / deny
+     |                                     |
+     |<------------- approved -------------+
+     |           (1 to 60 minutes)
+     |
+     | GET .../patient
+     v
+  patient record  +  audit event
+```
+
+### Rules
+
+- A grant names one tenant and one patient. There is no tenant-wide grant.
+- Only a `platform_admin` can request.
+- Only a `chef` of the patient's tenant can approve or deny.
+- A requester cannot approve their own grant.
+- The window is 1 to 60 minutes. The default is 30 minutes.
+- Access is read-only. The only route is `GET .../patient`.
+- The requester or the tenant `chef` can revoke at any time.
+- The active check uses `clock_timestamp()`.
+- Every request, decision, revocation, list and read is audited in the patient's
+  tenant.
+- A forbidden attempt writes `access.denied`. The denial row is committed before
+  the API returns `403`.
+- Audit metadata holds ids, counts, duration and expiry. It does not hold the
+  patient name, the reason or health data.
+- The grant row has row-level security and belongs to the patient's tenant.
+
+### Limits
+
+- No tenant-wide grant and no support UI.
+- No cross-tenant user API.
+- A `platform_admin` is still tenant-bound. Keep platform staff in an
+  operator-only tenant.
+- Support needs a reachable `chef`. Out of hours, the tenant must nominate an
+  on-call `chef`.
+
+See `docs/decisions/ADR-021-break-glass-access.md`.
+
+---
+
 ## Project status
 
 ### Completed
@@ -556,6 +616,7 @@ See `docs/decisions/ADR-020-authentication-hardening.md`.
 | Go backend, PostgreSQL, sqlc, migrations | Complete |
 | Session authentication, CSRF, rate limit | Complete |
 | Step 2: MFA, password reset, user disable, session purge | Complete |
+| Step 3: break-glass access for `platform_admin` | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -587,9 +648,10 @@ The following checks pass:
 - `go vet ./...` passes.
 - `go test ./...` passes.
 - `TEST_DB_URL=... go test -race ./...` passes.
-- Migrations `internal/db/sql/schema/021_audit_hardening.sql` and
-  `internal/db/sql/schema/022_auth_hardening.sql` are applied to the development
-  and test databases. Goose version is 22.
+- Migrations `internal/db/sql/schema/021_audit_hardening.sql`,
+  `internal/db/sql/schema/022_auth_hardening.sql` and
+  `internal/db/sql/schema/023_break_glass.sql` are applied to the development
+  and test databases. Goose version is 23.
 - The deployment YAML and JSON files are valid.
 - `docker compose config` passes.
 - All compliance links and file references resolve.
@@ -598,7 +660,8 @@ The following checks pass:
 
 These are real gaps. They are not open design questions.
 
-1. No break-glass access for `platform_admin`.
+1. No tenant-wide break-glass grant and no support UI. One grant covers one
+   named patient.
 2. No email delivery for password reset or MFA changes.
 3. No automated retention or deletion job. No patient delete API.
 4. Tenant deletion fails once the tenant has audit events.
@@ -620,26 +683,22 @@ step 2 are complete.
 1. **Professional review.** Give the Point 21 documents to a data-protection
    lawyer and a billing expert. Record the result. Do not treat the drafts as
    approval.
-2. **Close the authentication gaps.** Complete: MFA for `chef` and
-   `platform_admin`, password reset, user disable and a scheduled session purge.
-3. **Design break-glass access.** Make it explicit, time-limited, read-only
-   where possible, approved and audited. Do not add a hidden superuser path.
-4. **Implement retention and deletion.** Add a scheduled job, a patient
+2. **Implement retention and deletion.** Add a scheduled job, a patient
    deletion procedure with a four-eyes check, and a deletion register.
-5. **Fix tenant termination.** Export the audit trail or use a controlled
+3. **Fix tenant termination.** Export the audit trail or use a controlled
    procedure. Test it on a staging copy with the same schema.
-6. **Prove recovery.** Select a PITR product. Run a quarterly PITR drill and
+4. **Prove recovery.** Select a PITR product. Run a quarterly PITR drill and
    record the result. Test the backup key recovery.
-7. **Add an external append-only audit sink.** Keep audit evidence independent
+5. **Add an external append-only audit sink.** Keep audit evidence independent
    of the database superuser.
-8. **Verify billing.** Confirm the § 105 SGB XI and § 302 SGB V procedure for
+6. **Verify billing.** Confirm the § 105 SGB XI and § 302 SGB V procedure for
    the first tenants. Add a verified transmission only after a payer test.
-9. **Harden production.** Use a secret manager, TLS and HSTS, set
+7. **Harden production.** Use a secret manager, TLS and HSTS, set
    `METRICS_TOKEN`, configure and test the alert receiver, and keep platform
    staff in an operator-only tenant.
-10. **Add the support model.** Decide how a `platform_admin` supports another
-    tenant without indirect patient access. Add a cross-tenant support API only
-    with a documented legal basis.
+8. **Extend the support model.** Decide how a `platform_admin` supports another
+   tenant beyond one named patient. Add a tenant-wide grant or a cross-tenant
+   support API only with a documented legal basis.
 
 ---
 
@@ -647,7 +706,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-020. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-021. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |

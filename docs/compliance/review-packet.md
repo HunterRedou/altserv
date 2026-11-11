@@ -86,7 +86,7 @@ A decision is not complete without a name and a date.
 | SE-01 | Is MFA required for `chef` and `platform_admin`? | Implemented and required. The reviewer must confirm the scope and the recovery process. | | | | |
 | SE-02 | Are password reset and user disable required? | Implemented and required. The reviewer must confirm the out-of-band token handover. | | | | |
 | SE-03 | Is a scheduled session purge required? | Implemented. The purge runs at startup and on an interval. | | | | |
-| SE-04 | Is the break-glass policy acceptable? | Not implemented. Future access must be explicit, time-limited, read-only where possible and audited. | | | | |
+| SE-04 | Is the break-glass policy acceptable? | Implemented. One named patient, tenant `chef` approval, 1 to 60 minutes, read-only, audited. The reviewer must confirm the approval and verification process. | | | | |
 | SE-05 | Which audit evidence strategy is used? | Export, de-identify or external sink. Not decided. | | | | |
 | SE-06 | Is the recovery target acceptable? | No PITR product and no automated drill yet. | | | | |
 | SE-07 | Is the production hardening complete? | Secrets, TLS, `METRICS_TOKEN`, alert receiver and operator-only tenant are required. | | | | |
@@ -103,6 +103,10 @@ The review must answer the decisions that the next step needs.
 | 5. Tenant termination | DP-06, DP-07, DP-10, BI-06, SE-05 |
 
 Do not start a step until its decisions are recorded in `review-record.md`.
+
+The project owner deferred the external review because no reviewer is available.
+Step 3 was implemented on that instruction while `review-record.md` stays blank.
+The review is still open and must confirm SE-04 before production.
 
 ## Part E: Sign-off
 

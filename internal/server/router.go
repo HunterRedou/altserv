@@ -93,6 +93,13 @@ type Handlers struct {
 	BillingRuleCreate   http.HandlerFunc
 	BillingTransmission http.HandlerFunc
 
+	BreakGlassList    http.HandlerFunc
+	BreakGlassRequest http.HandlerFunc
+	BreakGlassApprove http.HandlerFunc
+	BreakGlassDeny    http.HandlerFunc
+	BreakGlassRevoke  http.HandlerFunc
+	BreakGlassPatient http.HandlerFunc
+
 	Auth      func(http.Handler) http.Handler
 	CSRF      func(http.Handler) http.Handler
 	RequestID func(http.Handler) http.Handler
@@ -189,6 +196,12 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteBillingRules, protected(h.BillingRuleList))
 	mux.Handle(RouteCreateBillingRule, protected(h.BillingRuleCreate))
 	mux.Handle(RouteBillingTransmit, protected(h.BillingTransmission))
+	mux.Handle(RouteBreakGlassGrants, protected(h.BreakGlassList))
+	mux.Handle(RouteCreateBreakGlassGrant, protected(h.BreakGlassRequest))
+	mux.Handle(RouteApproveBreakGlassGrant, protected(h.BreakGlassApprove))
+	mux.Handle(RouteDenyBreakGlassGrant, protected(h.BreakGlassDeny))
+	mux.Handle(RouteRevokeBreakGlassGrant, protected(h.BreakGlassRevoke))
+	mux.Handle(RouteBreakGlassPatient, protected(h.BreakGlassPatient))
 
 	var handler http.Handler = mux
 	if h.Global != nil {
