@@ -9,6 +9,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type fakeAudit struct {
@@ -48,6 +49,12 @@ type fakeStore struct {
 	approveCalls     int
 	voidCalls        int
 	createRuleCalls  int
+
+	transmissions     []Transmission
+	createTransErr    error
+	completeTransErr  error
+	createTransCalls  int
+	completeTransCall int
 }
 
 func (f *fakeStore) GetReport(context.Context, *db.Queries, uuid.UUID, uuid.UUID) (db.Report, error) {
@@ -251,6 +258,114 @@ func (f *fakeStore) CreateRule(_ context.Context, _ *db.Queries, tenantID uuid.U
 		ValidFrom:                  input.ValidFrom,
 		ValidUntil:                 input.ValidUntil,
 	}, nil
+}
+
+// The fake transmission methods mirror the database constraints: a unique
+// idempotency key per tenant and at most one pending or accepted attempt per
+// run.
+func (f *fakeStore) CreateTransmission(_ context.Context, _ *db.Queries, params CreateTransmissionParams) (Transmission, error) {
+	f.createTransCalls++
+	if f.createTransErr != nil {
+		return Transmission{}, f.createTransErr
+	}
+	for _, existing := range f.transmissions {
+		if existing.TenantID != params.TenantID {
+			continue
+		}
+		if existing.IdempotencyKey == params.IdempotencyKey {
+			return Transmission{}, &pgconn.PgError{Code: "23505"}
+		}
+		if existing.RunID == params.RunID && isActiveTransmission(existing.Status) {
+			return Transmission{}, &pgconn.PgError{Code: "23505"}
+		}
+	}
+	now := time.Now().UTC()
+	transmission := Transmission{
+		ID:             uuid.New(),
+		TenantID:       params.TenantID,
+		RunID:          params.RunID,
+		LegalArea:      params.LegalArea,
+		Procedure:      ProcedureLabel(params.LegalArea),
+		Adapter:        params.Adapter,
+		Status:         TransmissionStatusPending,
+		IdempotencyKey: params.IdempotencyKey,
+		PayloadSHA256:  params.PayloadSHA256,
+		Attempt:        params.Attempt,
+		SubmittedBy:    params.SubmittedBy,
+		SubmittedAt:    now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	f.transmissions = append(f.transmissions, transmission)
+	return transmission, nil
+}
+
+func (f *fakeStore) GetTransmissionByKey(_ context.Context, _ *db.Queries, tenantID uuid.UUID, key string) (Transmission, error) {
+	for _, existing := range f.transmissions {
+		if existing.TenantID == tenantID && existing.IdempotencyKey == key {
+			return existing, nil
+		}
+	}
+	return Transmission{}, ErrNotFound
+}
+
+func (f *fakeStore) GetActiveTransmissionByRun(_ context.Context, _ *db.Queries, tenantID, runID uuid.UUID) (Transmission, error) {
+	for _, existing := range f.transmissions {
+		if existing.TenantID == tenantID && existing.RunID == runID && isActiveTransmission(existing.Status) {
+			return existing, nil
+		}
+	}
+	return Transmission{}, ErrNotFound
+}
+
+func (f *fakeStore) CountTransmissionsByRun(_ context.Context, _ *db.Queries, tenantID, runID uuid.UUID) (int, error) {
+	count := 0
+	for _, existing := range f.transmissions {
+		if existing.TenantID == tenantID && existing.RunID == runID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (f *fakeStore) CompleteTransmission(_ context.Context, _ *db.Queries, tenantID, id uuid.UUID, result TransmissionResult) (Transmission, error) {
+	f.completeTransCall++
+	if f.completeTransErr != nil {
+		return Transmission{}, f.completeTransErr
+	}
+	for i, existing := range f.transmissions {
+		if existing.TenantID != tenantID || existing.ID != id {
+			continue
+		}
+		if existing.Status != TransmissionStatusPending {
+			return Transmission{}, ErrConflict
+		}
+		now := time.Now().UTC()
+		existing.Status = result.Status
+		existing.ExternalReference = result.ExternalReference
+		existing.ResponseCode = result.ResponseCode
+		existing.ResponseMessage = result.ResponseMessage
+		existing.CompletedAt = &now
+		existing.UpdatedAt = now
+		f.transmissions[i] = existing
+		return existing, nil
+	}
+	return Transmission{}, ErrConflict
+}
+
+func (f *fakeStore) ListTransmissionsByRun(_ context.Context, _ *db.Queries, tenantID, runID uuid.UUID) ([]Transmission, error) {
+	result := []Transmission{}
+	for i := len(f.transmissions) - 1; i >= 0; i-- {
+		existing := f.transmissions[i]
+		if existing.TenantID == tenantID && existing.RunID == runID {
+			result = append(result, existing)
+		}
+	}
+	return result, nil
+}
+
+func isActiveTransmission(status string) bool {
+	return status == TransmissionStatusPending || status == TransmissionStatusAccepted
 }
 
 func readyReport() db.Report {
@@ -619,7 +734,7 @@ func TestTransmissionProceduresAreNotConfigured(t *testing.T) {
 	if TransmissionProcedures()[0].Status != TransmissionStatusNotConfigured {
 		t.Fatal("TransmissionProcedures exposes mutable package state")
 	}
-	if err := (UnconfiguredTransmitter{}).Submit(context.Background(), BillingRun{}); !errors.Is(err, ErrNotConfigured) {
+	if _, err := (UnconfiguredTransmitter{}).Submit(context.Background(), TransmissionRequest{}); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("Submit err = %v, want ErrNotConfigured", err)
 	}
 }

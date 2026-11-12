@@ -18,6 +18,18 @@ const (
 	maxBillingRules         = 1000
 )
 
+// CreateTransmissionParams is the persistence input for a new attempt.
+type CreateTransmissionParams struct {
+	TenantID       uuid.UUID
+	RunID          uuid.UUID
+	LegalArea      string
+	Adapter        string
+	IdempotencyKey string
+	PayloadSHA256  string
+	Attempt        int
+	SubmittedBy    uuid.UUID
+}
+
 // Store is the persistence boundary used by the billing service.
 type Store interface {
 	GetReport(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID) (db.Report, error)
@@ -39,16 +51,41 @@ type Store interface {
 	ListRules(ctx context.Context, q *db.Queries, tenantID uuid.UUID) ([]BillingRule, error)
 	GetServiceDefinition(ctx context.Context, q *db.Queries, id uuid.UUID) (db.ServiceDefinition, error)
 	CreateRule(ctx context.Context, q *db.Queries, tenantID uuid.UUID, input CreateRuleInput) (BillingRule, error)
+
+	CreateTransmission(ctx context.Context, q *db.Queries, params CreateTransmissionParams) (Transmission, error)
+	GetTransmissionByKey(ctx context.Context, q *db.Queries, tenantID uuid.UUID, key string) (Transmission, error)
+	GetActiveTransmissionByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) (Transmission, error)
+	CountTransmissionsByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) (int, error)
+	CompleteTransmission(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID, result TransmissionResult) (Transmission, error)
+	ListTransmissionsByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) ([]Transmission, error)
 }
 
 // Service contains the deterministic billing assistant rules (doc 14).
 type Service struct {
-	store Store
-	audit audit.Recorder
+	store       Store
+	audit       audit.Recorder
+	transmitter Transmitter
 }
 
 func NewService(store Store, recorder audit.Recorder) *Service {
-	return &Service{store: store, audit: recorder}
+	return NewServiceWithTransmitter(store, recorder, UnconfiguredTransmitter{})
+}
+
+// NewServiceWithTransmitter wires a specific transmission adapter. Production
+// must use UnconfiguredTransmitter until a verified payer procedure exists.
+func NewServiceWithTransmitter(store Store, recorder audit.Recorder, transmitter Transmitter) *Service {
+	if transmitter == nil {
+		transmitter = UnconfiguredTransmitter{}
+	}
+	return &Service{store: store, audit: recorder, transmitter: transmitter}
+}
+
+// TransmissionAdapter is the name of the wired adapter, for the status endpoint.
+func (s *Service) TransmissionAdapter() string {
+	if s.transmitter == nil {
+		return AdapterUnconfigured
+	}
+	return s.transmitter.Name()
 }
 
 // GenerateInput controls a generate or regenerate call. Version is 0 for the
@@ -297,6 +334,15 @@ func (s *Service) Void(ctx context.Context, q *db.Queries, actor Actor, requestI
 	if run.Version != version {
 		return BillingRun{}, ErrConflict
 	}
+	// A claim that is in flight or already accepted by a payer cannot be
+	// silently voided. The tenant must use the payer's correction procedure.
+	_, err = s.store.GetActiveTransmissionByRun(ctx, q, actor.TenantID, id)
+	if err == nil {
+		return BillingRun{}, fmt.Errorf("%w: a billing run with an active or accepted transmission cannot be voided", ErrConflict)
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return BillingRun{}, err
+	}
 
 	updated, err := s.store.VoidRun(ctx, q, actor.TenantID, id, actor.UserID, version)
 	if err != nil {
@@ -467,6 +513,252 @@ func (s *Service) CreateRule(ctx context.Context, q *db.Queries, actor Actor, re
 		return BillingRule{}, err
 	}
 	return rule, nil
+}
+
+// TransmitInput is one electronic submission request.
+type TransmitInput struct {
+	RunID          uuid.UUID
+	LegalArea      string
+	IdempotencyKey string
+}
+
+// TransmissionOutcome is the result of a submission request. Created is false
+// when the same idempotency key replayed an earlier attempt.
+type TransmissionOutcome struct {
+	Transmission Transmission
+	Created      bool
+}
+
+// Transmit submits one approved run through the configured adapter. A
+// rejected, failed or not-configured attempt is a recorded outcome, not a Go
+// error, because the attempt and its audit event must commit. Only
+// authorization, validation, database and idempotency conflicts return an
+// error.
+func (s *Service) Transmit(ctx context.Context, q *db.Queries, actor Actor, requestID string, input TransmitInput) (TransmissionOutcome, error) {
+	if !canManage(actor.Role) {
+		s.recordDenied(ctx, q, actor, requestID, "billing.transmit")
+		return TransmissionOutcome{}, ErrForbidden
+	}
+	if input.RunID == uuid.Nil {
+		return TransmissionOutcome{}, fmt.Errorf("%w: billing run id is required", ErrInvalid)
+	}
+	legalArea := strings.TrimSpace(input.LegalArea)
+	if legalArea != "sgb_xi" && legalArea != "sgb_v" {
+		return TransmissionOutcome{}, fmt.Errorf("%w: legal_area must be sgb_xi or sgb_v", ErrInvalid)
+	}
+	key := strings.TrimSpace(input.IdempotencyKey)
+	if !validIdempotencyKey(key) {
+		return TransmissionOutcome{}, fmt.Errorf("%w: idempotency key must be 8 to 128 characters from A-Z, a-z, 0-9, dot, colon, underscore or hyphen", ErrInvalid)
+	}
+
+	run, err := s.loadRun(ctx, q, actor.TenantID, input.RunID)
+	if err != nil {
+		return TransmissionOutcome{}, err
+	}
+	if err := ValidateTransmission(run, legalArea); err != nil {
+		return TransmissionOutcome{}, err
+	}
+
+	// Replaying the same key returns the earlier attempt instead of submitting
+	// again, even if that attempt was rejected or failed.
+	existing, err := s.store.GetTransmissionByKey(ctx, q, actor.TenantID, key)
+	if err == nil {
+		if existing.RunID != run.ID || existing.LegalArea != legalArea {
+			return TransmissionOutcome{}, fmt.Errorf("%w: the idempotency key was already used for another transmission", ErrConflict)
+		}
+		return TransmissionOutcome{Transmission: existing, Created: false}, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return TransmissionOutcome{}, err
+	}
+
+	// A run has at most one pending or accepted transmission. A rejected or
+	// failed attempt does not block a corrected retry.
+	_, err = s.store.GetActiveTransmissionByRun(ctx, q, actor.TenantID, run.ID)
+	if err == nil {
+		return TransmissionOutcome{}, fmt.Errorf("%w: the billing run already has an active or accepted transmission", ErrConflict)
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return TransmissionOutcome{}, err
+	}
+
+	adapter := s.TransmissionAdapter()
+	procedure := ProcedureLabel(legalArea)
+	if adapter == AdapterUnconfigured {
+		// No claim is sent and no transmission row is created. The attempt is
+		// still audited so an operator can see that a tenant tried to submit.
+		if err := s.record(ctx, q, audit.Event{
+			TenantID:    actor.TenantID,
+			ActorUserID: actor.UserID,
+			Action:      "billing.transmission_not_configured",
+			EntityType:  "billing_run",
+			EntityID:    run.ID,
+			RequestID:   requestID,
+			Metadata: map[string]any{
+				"run_id":     run.ID,
+				"legal_area": legalArea,
+				"adapter":    AdapterUnconfigured,
+			},
+		}); err != nil {
+			return TransmissionOutcome{}, err
+		}
+		return TransmissionOutcome{Transmission: Transmission{
+			TenantID:  actor.TenantID,
+			RunID:     run.ID,
+			LegalArea: legalArea,
+			Procedure: procedure,
+			Adapter:   AdapterUnconfigured,
+			Status:    TransmissionStatusNotConfigured,
+		}}, nil
+	}
+
+	attempts, err := s.store.CountTransmissionsByRun(ctx, q, actor.TenantID, run.ID)
+	if err != nil {
+		return TransmissionOutcome{}, err
+	}
+
+	transmission, err := s.store.CreateTransmission(ctx, q, CreateTransmissionParams{
+		TenantID:       actor.TenantID,
+		RunID:          run.ID,
+		LegalArea:      legalArea,
+		Adapter:        adapter,
+		IdempotencyKey: key,
+		PayloadSHA256:  transmissionPayloadHash(run, legalArea),
+		Attempt:        attempts + 1,
+		SubmittedBy:    actor.UserID,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return TransmissionOutcome{}, fmt.Errorf("%w: the billing run was already submitted or the idempotency key is in use", ErrConflict)
+		}
+		return TransmissionOutcome{}, err
+	}
+
+	if err := s.record(ctx, q, audit.Event{
+		TenantID:    actor.TenantID,
+		ActorUserID: actor.UserID,
+		Action:      "billing.transmission_requested",
+		EntityType:  "billing_transmission",
+		EntityID:    transmission.ID,
+		RequestID:   requestID,
+		Metadata: map[string]any{
+			"run_id":     run.ID,
+			"legal_area": legalArea,
+			"adapter":    adapter,
+			"attempt":    transmission.Attempt,
+		},
+	}); err != nil {
+		return TransmissionOutcome{}, err
+	}
+
+	result, submitErr := s.transmitter.Submit(ctx, TransmissionRequest{
+		Run:            run,
+		LegalArea:      legalArea,
+		Procedure:      procedure,
+		IdempotencyKey: key,
+	})
+	if submitErr != nil {
+		result = TransmissionResult{
+			Status:          TransmissionStatusFailed,
+			ResponseCode:    "adapter_error",
+			ResponseMessage: "The transmission adapter failed before a payer response was received.",
+		}
+	} else {
+		result = normalizeTransmissionResult(result)
+	}
+
+	completed, err := s.store.CompleteTransmission(ctx, q, actor.TenantID, transmission.ID, result)
+	if err != nil {
+		return TransmissionOutcome{}, err
+	}
+
+	action := "billing.transmission_failed"
+	switch completed.Status {
+	case TransmissionStatusAccepted:
+		action = "billing.transmission_accepted"
+	case TransmissionStatusRejected:
+		action = "billing.transmission_rejected"
+	}
+	if err := s.record(ctx, q, audit.Event{
+		TenantID:    actor.TenantID,
+		ActorUserID: actor.UserID,
+		Action:      action,
+		EntityType:  "billing_transmission",
+		EntityID:    completed.ID,
+		RequestID:   requestID,
+		Metadata: map[string]any{
+			"run_id":             completed.RunID,
+			"legal_area":         completed.LegalArea,
+			"adapter":            completed.Adapter,
+			"attempt":            completed.Attempt,
+			"status":             completed.Status,
+			"response_code":      completed.ResponseCode,
+			"external_reference": completed.ExternalReference,
+		},
+	}); err != nil {
+		return TransmissionOutcome{}, err
+	}
+
+	return TransmissionOutcome{Transmission: completed, Created: true}, nil
+}
+
+// ListTransmissions returns the attempt history of one run, newest first.
+func (s *Service) ListTransmissions(ctx context.Context, q *db.Queries, actor Actor, requestID string, runID uuid.UUID) ([]Transmission, error) {
+	if !canManage(actor.Role) {
+		s.recordDenied(ctx, q, actor, requestID, "billing.transmission_read")
+		return nil, ErrForbidden
+	}
+	if runID == uuid.Nil {
+		return nil, fmt.Errorf("%w: billing run id is required", ErrInvalid)
+	}
+	if _, err := s.store.GetRun(ctx, q, actor.TenantID, runID); err != nil {
+		return nil, err
+	}
+	return s.store.ListTransmissionsByRun(ctx, q, actor.TenantID, runID)
+}
+
+func validIdempotencyKey(key string) bool {
+	if len(key) < 8 || len(key) > 128 {
+		return false
+	}
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.', r == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeTransmissionResult keeps a broken adapter from writing an unknown
+// status or an unbounded message. A payer message is bounded and must not carry
+// patient names or free text.
+func normalizeTransmissionResult(result TransmissionResult) TransmissionResult {
+	if result.Status != TransmissionStatusAccepted && result.Status != TransmissionStatusRejected {
+		result.Status = TransmissionStatusFailed
+		if result.ResponseCode == "" {
+			result.ResponseCode = "invalid_adapter_result"
+		}
+		if result.ResponseMessage == "" {
+			result.ResponseMessage = "The transmission adapter returned no valid status."
+		}
+	}
+	result.ExternalReference = truncateRunes(result.ExternalReference, 200)
+	result.ResponseCode = truncateRunes(result.ResponseCode, 100)
+	result.ResponseMessage = truncateRunes(result.ResponseMessage, 500)
+	return result
+}
+
+func truncateRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
 
 func (s *Service) loadRun(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID) (BillingRun, error) {

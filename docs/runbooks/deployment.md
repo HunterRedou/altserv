@@ -174,6 +174,25 @@ report or billing transaction.
   ```
   The two table checks must be `false`; the function check must be `true`.
 
+## Billing transmission after deploy
+
+- Migration `internal/db/sql/schema/027_billing_transmission.sql` adds the
+  append-only `billing_transmissions` table (ADR-026).
+- Production keeps `BILLING_TRANSMISSION_ADAPTER` unset or `unconfigured`.
+  `POST /api/billing-runs/{id}/transmit` then answers `503` and sends nothing.
+  The app refuses to start with `BILLING_TRANSMISSION_ADAPTER=test` unless
+  `PLATFORM=dev`.
+- Verify the status endpoint reports the safe adapter:
+  ```bash
+  curl -fsS -b "__Host-session=$SESSION" https://altserv.example/api/billing-transmission
+  ```
+  `adapter` must be `unconfigured`.
+- Verify that the application role cannot delete an attempt:
+  ```sql
+  SELECT has_table_privilege('altserv_app', 'billing_transmissions', 'DELETE');
+  ```
+  The result must be `false`.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz

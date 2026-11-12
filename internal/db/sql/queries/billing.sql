@@ -161,6 +161,51 @@ SELECT * FROM billing_rules
 WHERE id = $1
   AND tenant_id = $2;
 
+-- name: CreateBillingTransmission :one
+INSERT INTO billing_transmissions (
+  tenant_id, run_id, legal_area, adapter, status, idempotency_key,
+  payload_sha256, attempt, submitted_by
+)
+VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8)
+RETURNING *;
+
+-- name: GetBillingTransmissionByKey :one
+SELECT * FROM billing_transmissions
+WHERE tenant_id = $1
+  AND idempotency_key = $2;
+
+-- name: GetActiveBillingTransmissionByRun :one
+SELECT * FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2
+  AND status IN ('pending', 'accepted')
+ORDER BY attempt DESC, submitted_at DESC
+LIMIT 1;
+
+-- name: CountBillingTransmissionsByRun :one
+SELECT count(*) FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2;
+
+-- name: CompleteBillingTransmission :one
+UPDATE billing_transmissions
+SET status = $3,
+    external_reference = $4,
+    response_code = $5,
+    response_message = $6,
+    completed_at = clock_timestamp(),
+    updated_at = clock_timestamp()
+WHERE id = $1
+  AND tenant_id = $2
+  AND status = 'pending'
+RETURNING *;
+
+-- name: ListBillingTransmissionsByRun :many
+SELECT * FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2
+ORDER BY attempt DESC, submitted_at DESC, id;
+
 -- name: ListBillingRules :many
 SELECT * FROM billing_rules
 WHERE tenant_id = $1

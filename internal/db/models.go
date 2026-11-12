@@ -119,6 +119,26 @@ type BillingRun struct {
 	UpdatedAt   time.Time
 }
 
+type BillingTransmission struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	RunID             uuid.UUID
+	LegalArea         string
+	Adapter           string
+	Status            string
+	IdempotencyKey    string
+	PayloadSha256     string
+	Attempt           int32
+	ExternalReference string
+	ResponseCode      string
+	ResponseMessage   string
+	SubmittedBy       uuid.UUID
+	SubmittedAt       time.Time
+	CompletedAt       sql.NullTime
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type BreakGlassGrant struct {
 	ID             uuid.UUID
 	TenantID       uuid.UUID

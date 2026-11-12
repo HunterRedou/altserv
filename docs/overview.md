@@ -473,7 +473,9 @@ patient and employee data
 - Backups are personal data. They need encryption, access control and a
   deletion rule.
 - Billing follows the current § 105 SGB XI or § 302 SGB V procedure. The
-  application does not transmit a claim. Exports are internal CSV and PDF only.
+  application does not transmit a claim in production. Exports are internal
+  CSV and PDF. The transmission boundary (ADR-026) is idempotent and audited,
+  but only the synthetic development payer is wired.
 
 ### Confirmed technical facts in the documents
 
@@ -763,6 +765,7 @@ See `docs/decisions/ADR-022-retention-deletion.md`.
 | Step 5: tenant termination | Complete |
 | Catalog administration and verified catalog import | Complete |
 | Synthetic development seed data | Complete |
+| Billing transmission boundary and synthetic test payer | Complete; production adapter not configured |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -826,7 +829,8 @@ These are real gaps. They are not open design questions.
 4. Tenant deletion fails once the tenant has audit events.
 5. No external append-only audit sink. A superuser can disable the triggers.
 6. No shipped PITR product and no automated PITR drill.
-7. Billing transmission is deliberately `not_configured`.
+7. Billing transmission is deliberately `not_configured` in production. The
+   boundary, idempotency and audit exist; a real payer adapter does not.
 8. No one-click data-subject access export.
 9. `platform_admin` is tenant-bound. There is no cross-tenant support API.
 10. No shared rate-limit store for multi-instance deployments.
@@ -858,6 +862,8 @@ step 2 are complete.
    of the database superuser.
 6. **Verify billing.** Confirm the § 105 SGB XI and § 302 SGB V procedure for
    the first tenants. Add a verified transmission only after a payer test.
+   The boundary from ADR-026 is ready; a real adapter must run through an
+   outbox and be idempotent on the idempotency key.
 7. **Harden production.** Use a secret manager, TLS and HSTS, set
    `METRICS_TOKEN`, configure and test the alert receiver, and keep platform
    staff in an operator-only tenant.
@@ -878,7 +884,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-025. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-026. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `docs/security-review.md` | Internal security review; not an external audit. |

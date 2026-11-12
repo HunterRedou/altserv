@@ -110,7 +110,13 @@ func main() {
 	templateService := templates.NewService(templates.NewRepository(), catalogRepository, auditRecorder, assignmentService)
 	visitService := visits.NewService(visits.NewRepository(), auditRecorder, assignmentService)
 	reportService := reports.NewService(reports.NewRepository(patientCipher), auditRecorder, assignmentService)
-	billingService := billing.NewService(billing.NewRepository(), auditRecorder)
+	var billingTransmitter billing.Transmitter = billing.UnconfiguredTransmitter{}
+	if cfg.BillingTransmissionAdapter == billing.AdapterTest {
+		// config.Load only allows the synthetic payer with PLATFORM=dev.
+		billingTransmitter = billing.TestPayer{}
+		log.Printf("billing transmission: synthetic test payer enabled (PLATFORM=dev)")
+	}
+	billingService := billing.NewServiceWithTransmitter(billing.NewRepository(), auditRecorder, billingTransmitter)
 	breakGlassService := breakglass.NewService(breakglass.NewRepository(), auditRecorder, patientService)
 	retentionService := retention.NewService(retention.NewRepository(), auditRecorder)
 

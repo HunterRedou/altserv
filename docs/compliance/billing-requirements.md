@@ -114,8 +114,28 @@ tenant's own four-eyes review.
 | --- | --- | --- |
 | CSV | Implemented | Internal only. Semicolon-separated, formula-safe, ids and billing data. |
 | PDF | Implemented | Internal only. Built-in font, no external PDF service. |
-| Electronic transmission | Not configured | The API reports `not_configured`. No claim is sent. |
+| Electronic transmission | Boundary only | Production adapter is `unconfigured`: the API answers 503 and no claim is sent. |
+| Synthetic test payer | Development only | `BILLING_TRANSMISSION_ADAPTER=test`, rejected unless `PLATFORM=dev`. In-process, no network. |
 | Email | Not allowed | Plain email is not acceptable for health data. |
+
+### Transmission boundary
+
+The boundary is described in ADR-026
+(`../decisions/ADR-026-billing-transmission-boundary.md`). It provides:
+
+- `POST /api/billing-runs/{id}/transmit` and
+  `GET /api/billing-runs/{id}/transmissions`, `chef` only
+- an idempotency key per submission; a replay returns the earlier attempt
+- at most one pending or accepted attempt per run, enforced by a unique index
+- a recorded, retryable attempt for a rejection or an adapter failure
+- one legal area per submission; a run with mixed legal areas is rejected
+- no void of a run with a pending or accepted attempt
+- an append-only `billing_transmissions` table with RLS and no `DELETE` grant
+- a SHA-256 fingerprint of the submitted lines instead of a payload copy
+- audit events without payer messages, procedure text, names or free text
+
+No § 105 or § 302 format is implemented. A real adapter needs the items in the
+review list below and a recorded payer test.
 
 A future transmission must:
 
@@ -166,7 +186,9 @@ support ticket.
 - Audit of every state change and export.
 - CSV formula injection protection.
 - PDF uses a built-in font and no external service.
-- No transmission path.
+- No production transmission path. The transmission boundary is idempotent,
+  audited and append-only; only the synthetic test payer is wired, and only in
+  development.
 
 ## Professional review before production
 
@@ -182,6 +204,10 @@ relevant, by a data protection lawyer:
 - [ ] The approval workflow matches the tenant's internal control.
 - [ ] The export is sufficient for the payer, or a verified transmission is
       implemented.
+- [ ] A real transmission adapter is idempotent on the idempotency key, runs
+      through an outbox, and has a recorded payer test.
+- [ ] The payer's response messages are checked for personal data before they
+      are stored in `billing_transmissions.response_message`.
 - [ ] Retention and archiving satisfy GoBD and the payer.
 - [ ] The data protection review and the DPIA cover billing.
 - [ ] Staff are trained that the assistant does not replace human review.

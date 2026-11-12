@@ -59,6 +59,79 @@ func (q *Queries) ApproveBillingRun(ctx context.Context, arg ApproveBillingRunPa
 	return i, err
 }
 
+const completeBillingTransmission = `-- name: CompleteBillingTransmission :one
+UPDATE billing_transmissions
+SET status = $3,
+    external_reference = $4,
+    response_code = $5,
+    response_message = $6,
+    completed_at = clock_timestamp(),
+    updated_at = clock_timestamp()
+WHERE id = $1
+  AND tenant_id = $2
+  AND status = 'pending'
+RETURNING id, tenant_id, run_id, legal_area, adapter, status, idempotency_key, payload_sha256, attempt, external_reference, response_code, response_message, submitted_by, submitted_at, completed_at, created_at, updated_at
+`
+
+type CompleteBillingTransmissionParams struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	Status            string
+	ExternalReference string
+	ResponseCode      string
+	ResponseMessage   string
+}
+
+func (q *Queries) CompleteBillingTransmission(ctx context.Context, arg CompleteBillingTransmissionParams) (BillingTransmission, error) {
+	row := q.db.QueryRowContext(ctx, completeBillingTransmission,
+		arg.ID,
+		arg.TenantID,
+		arg.Status,
+		arg.ExternalReference,
+		arg.ResponseCode,
+		arg.ResponseMessage,
+	)
+	var i BillingTransmission
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RunID,
+		&i.LegalArea,
+		&i.Adapter,
+		&i.Status,
+		&i.IdempotencyKey,
+		&i.PayloadSha256,
+		&i.Attempt,
+		&i.ExternalReference,
+		&i.ResponseCode,
+		&i.ResponseMessage,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const countBillingTransmissionsByRun = `-- name: CountBillingTransmissionsByRun :one
+SELECT count(*) FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2
+`
+
+type CountBillingTransmissionsByRunParams struct {
+	TenantID uuid.UUID
+	RunID    uuid.UUID
+}
+
+func (q *Queries) CountBillingTransmissionsByRun(ctx context.Context, arg CountBillingTransmissionsByRunParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countBillingTransmissionsByRun, arg.TenantID, arg.RunID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createBillingRule = `-- name: CreateBillingRule :one
 INSERT INTO billing_rules (
   tenant_id, kind, service_definition_id, related_service_definition_id,
@@ -145,6 +218,60 @@ func (q *Queries) CreateBillingRun(ctx context.Context, arg CreateBillingRunPara
 	return i, err
 }
 
+const createBillingTransmission = `-- name: CreateBillingTransmission :one
+INSERT INTO billing_transmissions (
+  tenant_id, run_id, legal_area, adapter, status, idempotency_key,
+  payload_sha256, attempt, submitted_by
+)
+VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8)
+RETURNING id, tenant_id, run_id, legal_area, adapter, status, idempotency_key, payload_sha256, attempt, external_reference, response_code, response_message, submitted_by, submitted_at, completed_at, created_at, updated_at
+`
+
+type CreateBillingTransmissionParams struct {
+	TenantID       uuid.UUID
+	RunID          uuid.UUID
+	LegalArea      string
+	Adapter        string
+	IdempotencyKey string
+	PayloadSha256  string
+	Attempt        int32
+	SubmittedBy    uuid.UUID
+}
+
+func (q *Queries) CreateBillingTransmission(ctx context.Context, arg CreateBillingTransmissionParams) (BillingTransmission, error) {
+	row := q.db.QueryRowContext(ctx, createBillingTransmission,
+		arg.TenantID,
+		arg.RunID,
+		arg.LegalArea,
+		arg.Adapter,
+		arg.IdempotencyKey,
+		arg.PayloadSha256,
+		arg.Attempt,
+		arg.SubmittedBy,
+	)
+	var i BillingTransmission
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RunID,
+		&i.LegalArea,
+		&i.Adapter,
+		&i.Status,
+		&i.IdempotencyKey,
+		&i.PayloadSha256,
+		&i.Attempt,
+		&i.ExternalReference,
+		&i.ResponseCode,
+		&i.ResponseMessage,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteBillingFindings = `-- name: DeleteBillingFindings :exec
 DELETE FROM billing_findings
 WHERE run_id = $1
@@ -206,6 +333,45 @@ func (q *Queries) GetActiveBillingRunByReport(ctx context.Context, arg GetActive
 		&i.ApprovedAt,
 		&i.VoidedBy,
 		&i.VoidedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getActiveBillingTransmissionByRun = `-- name: GetActiveBillingTransmissionByRun :one
+SELECT id, tenant_id, run_id, legal_area, adapter, status, idempotency_key, payload_sha256, attempt, external_reference, response_code, response_message, submitted_by, submitted_at, completed_at, created_at, updated_at FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2
+  AND status IN ('pending', 'accepted')
+ORDER BY attempt DESC, submitted_at DESC
+LIMIT 1
+`
+
+type GetActiveBillingTransmissionByRunParams struct {
+	TenantID uuid.UUID
+	RunID    uuid.UUID
+}
+
+func (q *Queries) GetActiveBillingTransmissionByRun(ctx context.Context, arg GetActiveBillingTransmissionByRunParams) (BillingTransmission, error) {
+	row := q.db.QueryRowContext(ctx, getActiveBillingTransmissionByRun, arg.TenantID, arg.RunID)
+	var i BillingTransmission
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RunID,
+		&i.LegalArea,
+		&i.Adapter,
+		&i.Status,
+		&i.IdempotencyKey,
+		&i.PayloadSha256,
+		&i.Attempt,
+		&i.ExternalReference,
+		&i.ResponseCode,
+		&i.ResponseMessage,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -325,6 +491,42 @@ func (q *Queries) GetBillingServiceDefinition(ctx context.Context, id uuid.UUID)
 		&i.Unit,
 		&i.ValidFrom,
 		&i.ValidUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getBillingTransmissionByKey = `-- name: GetBillingTransmissionByKey :one
+SELECT id, tenant_id, run_id, legal_area, adapter, status, idempotency_key, payload_sha256, attempt, external_reference, response_code, response_message, submitted_by, submitted_at, completed_at, created_at, updated_at FROM billing_transmissions
+WHERE tenant_id = $1
+  AND idempotency_key = $2
+`
+
+type GetBillingTransmissionByKeyParams struct {
+	TenantID       uuid.UUID
+	IdempotencyKey string
+}
+
+func (q *Queries) GetBillingTransmissionByKey(ctx context.Context, arg GetBillingTransmissionByKeyParams) (BillingTransmission, error) {
+	row := q.db.QueryRowContext(ctx, getBillingTransmissionByKey, arg.TenantID, arg.IdempotencyKey)
+	var i BillingTransmission
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RunID,
+		&i.LegalArea,
+		&i.Adapter,
+		&i.Status,
+		&i.IdempotencyKey,
+		&i.PayloadSha256,
+		&i.Attempt,
+		&i.ExternalReference,
+		&i.ResponseCode,
+		&i.ResponseMessage,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -760,6 +962,59 @@ func (q *Queries) ListBillingRunsByReport(ctx context.Context, arg ListBillingRu
 			&i.ApprovedAt,
 			&i.VoidedBy,
 			&i.VoidedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBillingTransmissionsByRun = `-- name: ListBillingTransmissionsByRun :many
+SELECT id, tenant_id, run_id, legal_area, adapter, status, idempotency_key, payload_sha256, attempt, external_reference, response_code, response_message, submitted_by, submitted_at, completed_at, created_at, updated_at FROM billing_transmissions
+WHERE tenant_id = $1
+  AND run_id = $2
+ORDER BY attempt DESC, submitted_at DESC, id
+`
+
+type ListBillingTransmissionsByRunParams struct {
+	TenantID uuid.UUID
+	RunID    uuid.UUID
+}
+
+func (q *Queries) ListBillingTransmissionsByRun(ctx context.Context, arg ListBillingTransmissionsByRunParams) ([]BillingTransmission, error) {
+	rows, err := q.db.QueryContext(ctx, listBillingTransmissionsByRun, arg.TenantID, arg.RunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BillingTransmission
+	for rows.Next() {
+		var i BillingTransmission
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.RunID,
+			&i.LegalArea,
+			&i.Adapter,
+			&i.Status,
+			&i.IdempotencyKey,
+			&i.PayloadSha256,
+			&i.Attempt,
+			&i.ExternalReference,
+			&i.ResponseCode,
+			&i.ResponseMessage,
+			&i.SubmittedBy,
+			&i.SubmittedAt,
+			&i.CompletedAt,
+			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err

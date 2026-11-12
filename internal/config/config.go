@@ -21,6 +21,8 @@ const (
 	// defaultRetentionReviewInterval is daily. The review only reports counts,
 	// so a long interval is enough and keeps the cross-tenant query cheap.
 	defaultRetentionReviewInterval = 24 * time.Hour
+	// defaultBillingTransmissionAdapter never sends a claim.
+	defaultBillingTransmissionAdapter = "unconfigured"
 )
 
 // Config is the runtime configuration loaded from environment variables.
@@ -75,6 +77,12 @@ type Config struct {
 	// RetentionReviewInterval controls the background retention review. The
 	// job reports candidate counts only; it never deletes data.
 	RetentionReviewInterval time.Duration
+
+	// BillingTransmissionAdapter selects the electronic billing adapter.
+	// "unconfigured" is the only production value until a §105 SGB XI or
+	// §302 SGB V procedure is professionally verified. "test" is a synthetic
+	// in-process payer and is only allowed when PLATFORM=dev.
+	BillingTransmissionAdapter string
 }
 
 // Load reads the environment, applies defaults and validates the result.
@@ -100,6 +108,8 @@ func Load() (Config, error) {
 		MFAKeyVersion:           defaultKeyVersion,
 		SessionPurgeInterval:    defaultSessionPurgeInterval,
 		RetentionReviewInterval: defaultRetentionReviewInterval,
+
+		BillingTransmissionAdapter: envOrDefault("BILLING_TRANSMISSION_ADAPTER", defaultBillingTransmissionAdapter),
 	}
 
 	if raw := os.Getenv("SESSION_DURATION"); raw != "" {

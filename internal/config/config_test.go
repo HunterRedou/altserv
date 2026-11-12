@@ -358,3 +358,50 @@ func TestLoad(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadBillingTransmissionAdapter(t *testing.T) {
+	t.Run("defaults to unconfigured", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("BILLING_TRANSMISSION_ADAPTER", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.BillingTransmissionAdapter != "unconfigured" {
+			t.Fatalf("adapter = %q, want unconfigured", cfg.BillingTransmissionAdapter)
+		}
+	})
+
+	t.Run("allows the test payer in dev", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("BILLING_TRANSMISSION_ADAPTER", "test")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.BillingTransmissionAdapter != "test" {
+			t.Fatalf("adapter = %q, want test", cfg.BillingTransmissionAdapter)
+		}
+	})
+
+	// The synthetic payer accepts every claim, so it must never run in prod.
+	t.Run("rejects the test payer in prod", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("PLATFORM", "prod")
+		t.Setenv("BILLING_TRANSMISSION_ADAPTER", "test")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "BILLING_TRANSMISSION_ADAPTER") {
+			t.Fatalf("Load err = %v, want BILLING_TRANSMISSION_ADAPTER error", err)
+		}
+	})
+
+	t.Run("rejects unknown adapters", func(t *testing.T) {
+		for _, value := range []string{"dta", "TEST", "live"} {
+			setValidBaseEnv(t)
+			t.Setenv("BILLING_TRANSMISSION_ADAPTER", value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load returned nil error for BILLING_TRANSMISSION_ADAPTER=%q", value)
+			}
+		}
+	})
+}

@@ -32,3 +32,24 @@ func ValidateExport(run BillingRun) error {
 	}
 	return nil
 }
+
+// ValidateTransmission checks that a run can be submitted as one legal area.
+// A run with mixed legal areas must be split first, because §105 SGB XI and
+// §302 SGB V use different procedures and payers.
+func ValidateTransmission(run BillingRun, legalArea string) error {
+	if legalArea != "sgb_xi" && legalArea != "sgb_v" {
+		return fmt.Errorf("%w: unknown legal area", ErrInvalid)
+	}
+	if run.Status != "approved" {
+		return fmt.Errorf("%w: only an approved billing run can be transmitted", ErrConflict)
+	}
+	if len(run.Lines) == 0 {
+		return fmt.Errorf("%w: the billing run has no lines", ErrInvalid)
+	}
+	for _, line := range run.Lines {
+		if line.LegalArea != legalArea {
+			return fmt.Errorf("%w: the billing run contains a line outside the selected legal area", ErrInvalid)
+		}
+	}
+	return nil
+}

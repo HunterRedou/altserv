@@ -282,6 +282,122 @@ func (r *Repository) CreateRule(ctx context.Context, q *db.Queries, tenantID uui
 	return toBillingRule(row), nil
 }
 
+func (r *Repository) CreateTransmission(ctx context.Context, q *db.Queries, params CreateTransmissionParams) (Transmission, error) {
+	row, err := q.CreateBillingTransmission(ctx, db.CreateBillingTransmissionParams{
+		TenantID:       params.TenantID,
+		RunID:          params.RunID,
+		LegalArea:      params.LegalArea,
+		Adapter:        params.Adapter,
+		IdempotencyKey: params.IdempotencyKey,
+		PayloadSha256:  params.PayloadSHA256,
+		Attempt:        int32(params.Attempt),
+		SubmittedBy:    params.SubmittedBy,
+	})
+	if err != nil {
+		return Transmission{}, fmt.Errorf("create billing transmission: %w", err)
+	}
+	return toTransmission(row), nil
+}
+
+func (r *Repository) GetTransmissionByKey(ctx context.Context, q *db.Queries, tenantID uuid.UUID, key string) (Transmission, error) {
+	row, err := q.GetBillingTransmissionByKey(ctx, db.GetBillingTransmissionByKeyParams{
+		TenantID:       tenantID,
+		IdempotencyKey: key,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return Transmission{}, ErrNotFound
+	}
+	if err != nil {
+		return Transmission{}, fmt.Errorf("get billing transmission by key: %w", err)
+	}
+	return toTransmission(row), nil
+}
+
+func (r *Repository) GetActiveTransmissionByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) (Transmission, error) {
+	row, err := q.GetActiveBillingTransmissionByRun(ctx, db.GetActiveBillingTransmissionByRunParams{
+		TenantID: tenantID,
+		RunID:    runID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return Transmission{}, ErrNotFound
+	}
+	if err != nil {
+		return Transmission{}, fmt.Errorf("get active billing transmission: %w", err)
+	}
+	return toTransmission(row), nil
+}
+
+func (r *Repository) CountTransmissionsByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) (int, error) {
+	count, err := q.CountBillingTransmissionsByRun(ctx, db.CountBillingTransmissionsByRunParams{
+		TenantID: tenantID,
+		RunID:    runID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count billing transmissions: %w", err)
+	}
+	return int(count), nil
+}
+
+func (r *Repository) CompleteTransmission(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID, result TransmissionResult) (Transmission, error) {
+	row, err := q.CompleteBillingTransmission(ctx, db.CompleteBillingTransmissionParams{
+		ID:                id,
+		TenantID:          tenantID,
+		Status:            result.Status,
+		ExternalReference: result.ExternalReference,
+		ResponseCode:      result.ResponseCode,
+		ResponseMessage:   result.ResponseMessage,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return Transmission{}, ErrConflict
+	}
+	if err != nil {
+		return Transmission{}, fmt.Errorf("complete billing transmission: %w", err)
+	}
+	return toTransmission(row), nil
+}
+
+func (r *Repository) ListTransmissionsByRun(ctx context.Context, q *db.Queries, tenantID, runID uuid.UUID) ([]Transmission, error) {
+	rows, err := q.ListBillingTransmissionsByRun(ctx, db.ListBillingTransmissionsByRunParams{
+		TenantID: tenantID,
+		RunID:    runID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list billing transmissions: %w", err)
+	}
+	result := make([]Transmission, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, toTransmission(row))
+	}
+	return result, nil
+}
+
+func toTransmission(row db.BillingTransmission) Transmission {
+	transmission := Transmission{
+		ID:                row.ID,
+		TenantID:          row.TenantID,
+		RunID:             row.RunID,
+		LegalArea:         row.LegalArea,
+		Procedure:         ProcedureLabel(row.LegalArea),
+		Adapter:           row.Adapter,
+		Status:            row.Status,
+		IdempotencyKey:    row.IdempotencyKey,
+		PayloadSHA256:     row.PayloadSha256,
+		Attempt:           int(row.Attempt),
+		ExternalReference: row.ExternalReference,
+		ResponseCode:      row.ResponseCode,
+		ResponseMessage:   row.ResponseMessage,
+		SubmittedBy:       row.SubmittedBy,
+		SubmittedAt:       row.SubmittedAt,
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
+	}
+	if row.CompletedAt.Valid {
+		value := row.CompletedAt.Time
+		transmission.CompletedAt = &value
+	}
+	return transmission
+}
+
 func toBillingRun(row db.BillingRun) BillingRun {
 	run := BillingRun{
 		ID:          row.ID,

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/HunterRedou/altserv/internal/db"
@@ -59,7 +61,13 @@ type createRuleRequest struct {
 
 type transmissionResponse struct {
 	Status     string                  `json:"status"`
+	Adapter    string                  `json:"adapter"`
 	Procedures []TransmissionProcedure `json:"procedures"`
+}
+
+type transmitRequest struct {
+	LegalArea      string `json:"legal_area"`
+	IdempotencyKey string `json:"idempotency_key"`
 }
 
 // Generate handles POST /api/reports/{id}/billing.
@@ -274,7 +282,7 @@ func (h *Handler) CreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 // Transmission handles GET /api/billing-transmission. It describes the legal
-// submission procedures and never sends data.
+// submission procedures and the wired adapter, and never sends data.
 func (h *Handler) Transmission(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.actorFromContext(r.Context()); !ok {
 		server.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
@@ -282,8 +290,102 @@ func (h *Handler) Transmission(w http.ResponseWriter, r *http.Request) {
 	}
 	server.RespondWithJSON(w, http.StatusOK, transmissionResponse{
 		Status:     TransmissionStatusNotConfigured,
+		Adapter:    h.service.TransmissionAdapter(),
 		Procedures: TransmissionProcedures(),
 	})
+}
+
+// Transmit handles POST /api/billing-runs/{id}/transmit. Only a chef may submit
+// an approved run. The idempotency key comes from the Idempotency-Key header or
+// the JSON body.
+func (h *Handler) Transmit(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actorFromContext(r.Context())
+	if !ok {
+		server.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		server.RespondWithError(w, http.StatusBadRequest, "Invalid billing run id", nil)
+		return
+	}
+
+	var req transmitRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			server.RespondWithError(w, http.StatusBadRequest, "Couldn't decode parameters", err)
+			return
+		}
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		idempotencyKey = strings.TrimSpace(req.IdempotencyKey)
+	}
+
+	var outcome TransmissionOutcome
+	err = h.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		var err error
+		outcome, err = h.service.Transmit(r.Context(), q, actor, h.currentRequestID(r.Context()), TransmitInput{
+			RunID:          id,
+			LegalArea:      req.LegalArea,
+			IdempotencyKey: idempotencyKey,
+		})
+		return err
+	})
+	if err != nil {
+		respondBillingError(w, err)
+		return
+	}
+
+	switch outcome.Transmission.Status {
+	case TransmissionStatusAccepted:
+		status := http.StatusCreated
+		if !outcome.Created {
+			status = http.StatusOK
+		}
+		server.RespondWithJSON(w, status, outcome.Transmission)
+	// A rejected or failed attempt is recorded; the body carries its id and
+	// response code so the chef can correct the run and retry with a new key.
+	case TransmissionStatusRejected:
+		server.RespondWithJSON(w, http.StatusUnprocessableEntity, outcome.Transmission)
+	case TransmissionStatusFailed:
+		server.RespondWithJSON(w, http.StatusBadGateway, outcome.Transmission)
+	case TransmissionStatusNotConfigured:
+		server.RespondWithError(w, http.StatusServiceUnavailable, "Billing transmission is not configured", nil)
+	default:
+		server.RespondWithJSON(w, http.StatusAccepted, outcome.Transmission)
+	}
+}
+
+// ListTransmissions handles GET /api/billing-runs/{id}/transmissions.
+func (h *Handler) ListTransmissions(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actorFromContext(r.Context())
+	if !ok {
+		server.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		server.RespondWithError(w, http.StatusBadRequest, "Invalid billing run id", nil)
+		return
+	}
+
+	var transmissions []Transmission
+	err = h.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		var err error
+		transmissions, err = h.service.ListTransmissions(r.Context(), q, actor, h.currentRequestID(r.Context()), id)
+		return err
+	})
+	if err != nil {
+		respondBillingError(w, err)
+		return
+	}
+	if transmissions == nil {
+		transmissions = []Transmission{}
+	}
+	server.RespondWithJSON(w, http.StatusOK, transmissions)
 }
 
 func (h *Handler) versionAction(w http.ResponseWriter, r *http.Request, action func(*db.Queries, Actor, uuid.UUID, int) (BillingRun, error)) {

@@ -114,6 +114,8 @@ func (cfg *apiConfig) routes() http.Handler {
 		BillingRuleList:         billingHandler.ListRules,
 		BillingRuleCreate:       billingHandler.CreateRule,
 		BillingTransmission:     billingHandler.Transmission,
+		BillingTransmit:         billingHandler.Transmit,
+		BillingTransmissions:    billingHandler.ListTransmissions,
 		BreakGlassList:          breakGlassHandler.List,
 		BreakGlassRequest:       breakGlassHandler.Request,
 		BreakGlassApprove:       breakGlassHandler.Approve,

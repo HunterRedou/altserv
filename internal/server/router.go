@@ -83,17 +83,19 @@ type Handlers struct {
 	ReportReadyForBilling http.HandlerFunc
 	ReportTransitions     http.HandlerFunc
 
-	BillingGenerate     http.HandlerFunc
-	BillingGetActive    http.HandlerFunc
-	BillingListByReport http.HandlerFunc
-	BillingRunGet       http.HandlerFunc
-	BillingApprove      http.HandlerFunc
-	BillingVoid         http.HandlerFunc
-	BillingExportCSV    http.HandlerFunc
-	BillingExportPDF    http.HandlerFunc
-	BillingRuleList     http.HandlerFunc
-	BillingRuleCreate   http.HandlerFunc
-	BillingTransmission http.HandlerFunc
+	BillingGenerate      http.HandlerFunc
+	BillingGetActive     http.HandlerFunc
+	BillingListByReport  http.HandlerFunc
+	BillingRunGet        http.HandlerFunc
+	BillingApprove       http.HandlerFunc
+	BillingVoid          http.HandlerFunc
+	BillingExportCSV     http.HandlerFunc
+	BillingExportPDF     http.HandlerFunc
+	BillingRuleList      http.HandlerFunc
+	BillingRuleCreate    http.HandlerFunc
+	BillingTransmission  http.HandlerFunc
+	BillingTransmit      http.HandlerFunc
+	BillingTransmissions http.HandlerFunc
 
 	BreakGlassList    http.HandlerFunc
 	BreakGlassRequest http.HandlerFunc
@@ -219,6 +221,8 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteBillingRules, protected(h.BillingRuleList))
 	mux.Handle(RouteCreateBillingRule, protected(h.BillingRuleCreate))
 	mux.Handle(RouteBillingTransmit, protected(h.BillingTransmission))
+	mux.Handle(RouteTransmitBillingRun, protected(h.BillingTransmit))
+	mux.Handle(RouteBillingRunTransmissions, protected(h.BillingTransmissions))
 	mux.Handle(RouteBreakGlassGrants, protected(h.BreakGlassList))
 	mux.Handle(RouteCreateBreakGlassGrant, protected(h.BreakGlassRequest))
 	mux.Handle(RouteApproveBreakGlassGrant, protected(h.BreakGlassApprove))

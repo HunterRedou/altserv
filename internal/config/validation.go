@@ -127,6 +127,16 @@ func (c Config) validate() error {
 	if c.RetentionReviewInterval > maxRetentionReviewInterval {
 		return fmt.Errorf("RETENTION_REVIEW_INTERVAL must not exceed %s, got %s", maxRetentionReviewInterval, c.RetentionReviewInterval)
 	}
+	switch c.BillingTransmissionAdapter {
+	case "unconfigured":
+	case "test":
+		// The synthetic payer must never accept a real claim.
+		if c.Platform != "dev" {
+			return fmt.Errorf("BILLING_TRANSMISSION_ADAPTER=test is only allowed when PLATFORM=dev")
+		}
+	default:
+		return fmt.Errorf("BILLING_TRANSMISSION_ADAPTER must be unconfigured or test, got %q", c.BillingTransmissionAdapter)
+	}
 
 	return nil
 }
