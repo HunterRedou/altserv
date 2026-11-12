@@ -16,8 +16,8 @@ RUN apk add --no-cache ca-certificates tzdata \
     && adduser -S -G altserv -h /srv altserv
 
 WORKDIR /srv
+# start.html is embedded in the binary; nothing under /app/ is read from disk.
 COPY --from=build /out/altserv /usr/local/bin/altserv
-COPY --chown=altserv:altserv start.html /srv/start.html
 
 USER altserv
 EXPOSE 8080

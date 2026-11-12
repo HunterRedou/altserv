@@ -55,10 +55,33 @@ The review covered the application process and its PostgreSQL schema:
 | `/metrics` bearer token | Pass when `METRICS_TOKEN` is set | `tests/e2e/TestMetricsToken`, `observability_wiring_test.go` |
 | Login, CSRF and logout | Pass | `tests/e2e/TestLoginFlow`, `handler_sessions_db_test.go` |
 | Read-path smoke load | Pass on loopback | `docs/runbooks/load-testing.md` |
+| `/app/` serves no file from disk | Pass after fix | `handler_app_test.go` |
 
 ## Findings
 
-No critical or high-severity finding was identified in the reviewed scope.
+### Fixed: `/app/` exposed the working directory (critical)
+
+Found on 2026-11-12, after the first version of this review. `/app/` was
+served by `http.FileServer(http.Dir("."))`. Without a login it returned a
+directory listing and every file next to the process, including `.env` with the
+patient encryption, search and MFA keys, `connetion.txt` and the source code.
+The Docker image only contained `start.html` in its working directory, so it
+was less exposed; a deployment started from the repository folder was fully
+exposed.
+
+Fix: `start.html` is embedded with `go:embed` and served by an allowlist
+handler (`handler_app.go`). Only `GET`/`HEAD` on `/app/` and `/app/start.html`
+answer 200; every other path is 404 and nothing is read from disk. The
+Dockerfile no longer copies `start.html`. The regression tests in
+`handler_app_test.go` probe source files, dotfiles, traversal and encoded
+paths, and fail against the old file server.
+
+Follow-up: treat every key in a `.env` that was served by an affected process
+as leaked and rotate it. Local development keys protect synthetic data only;
+if a real key was ever used with such a process, follow
+`docs/runbooks/key-rotation.md`.
+
+### Known gaps
 
 The following are known gaps, not surprises:
 

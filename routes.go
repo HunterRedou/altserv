@@ -34,7 +34,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	auditHandler := cfg.auditHandler()
 
 	return server.NewRouter(server.Handlers{
-		App:                     cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))),
+		App:                     cfg.middlewareMetricsInc(http.HandlerFunc(cfg.handlerApp)),
 		Health:                  cfg.health.Live,
 		Ready:                   cfg.health.Ready,
 		Metrics:                 cfg.metricsHandler(),
