@@ -15,6 +15,30 @@ WHERE id = $1;
 SELECT * FROM service_definitions
 WHERE id = $1;
 
+-- Global reference data is written only through the reviewed SECURITY DEFINER
+-- functions from migration 026. The application role has SELECT only.
+-- name: CreateServiceCatalog :one
+SELECT * FROM create_service_catalog(
+  sqlc.arg(code)::text,
+  sqlc.arg(name)::text,
+  sqlc.arg(region)::text,
+  sqlc.arg(source_note)::text,
+  sqlc.arg(valid_from)::timestamp,
+  sqlc.narg(valid_until)::timestamp
+);
+
+-- name: CreateServiceDefinition :one
+SELECT * FROM create_service_definition(
+  sqlc.arg(catalog_id)::uuid,
+  sqlc.arg(code)::text,
+  sqlc.arg(name)::text,
+  sqlc.arg(description)::text,
+  sqlc.arg(legal_area)::text,
+  sqlc.arg(unit)::text,
+  sqlc.arg(valid_from)::timestamp,
+  sqlc.narg(valid_until)::timestamp
+);
+
 -- name: SearchServiceDefinitions :many
 SELECT d.* FROM service_definitions d
 JOIN service_catalogs c ON c.id = d.catalog_id

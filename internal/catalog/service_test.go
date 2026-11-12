@@ -20,6 +20,14 @@ type fakeStore struct {
 	catalog    Catalog
 	catalogErr error
 
+	createCatalogCalls int
+	lastCatalogInput   CreateCatalogInput
+	catalogCreateErr   error
+
+	createDefinitionCalls int
+	lastDefinitionInput   CreateDefinitionInput
+	definitionCreateErr   error
+
 	definitions    []Definition
 	definitionsErr error
 	lastFilter     DefinitionFilter
@@ -53,6 +61,18 @@ func (f *fakeStore) ListCatalogs(context.Context, *db.Queries, bool) ([]Catalog,
 
 func (f *fakeStore) GetCatalog(context.Context, *db.Queries, uuid.UUID) (Catalog, error) {
 	return f.catalog, f.catalogErr
+}
+
+func (f *fakeStore) CreateCatalog(_ context.Context, _ *db.Queries, input CreateCatalogInput) (Catalog, error) {
+	f.createCatalogCalls++
+	f.lastCatalogInput = input
+	return f.catalog, f.catalogCreateErr
+}
+
+func (f *fakeStore) CreateDefinition(_ context.Context, _ *db.Queries, input CreateDefinitionInput) (Definition, error) {
+	f.createDefinitionCalls++
+	f.lastDefinitionInput = input
+	return f.definition, f.definitionCreateErr
 }
 
 func (f *fakeStore) SearchDefinitions(_ context.Context, _ *db.Queries, filter DefinitionFilter, limit int) ([]Definition, error) {
@@ -114,24 +134,66 @@ func TestServiceCatalogReadAccess(t *testing.T) {
 	store := &fakeStore{}
 	service := NewService(store, &fakeAudit{})
 
-	for _, role := range []string{"chef", "employee"} {
+	// Global reference catalogs are readable by every authenticated role. They
+	// are not patient data, so platform_admin may read them (doc 4).
+	for _, role := range []string{"chef", "employee", "platform_admin"} {
 		t.Run(role, func(t *testing.T) {
-			if _, err := service.ListCatalogs(context.Background(), nil, Actor{UserID: uuid.New(), TenantID: uuid.New(), Role: role}, false); err != nil {
+			actor := Actor{UserID: uuid.New(), TenantID: uuid.New(), Role: role}
+			if _, err := service.ListCatalogs(context.Background(), nil, actor, false); err != nil {
 				t.Fatalf("ListCatalogs: %v", err)
+			}
+			if _, err := service.GetCatalog(context.Background(), nil, actor, uuid.New()); err != nil {
+				t.Fatalf("GetCatalog: %v", err)
+			}
+			if _, err := service.SearchDefinitions(context.Background(), nil, actor, DefinitionFilter{}); err != nil {
+				t.Fatalf("SearchDefinitions: %v", err)
+			}
+			if _, err := service.GetDefinition(context.Background(), nil, actor, uuid.New()); err != nil {
+				t.Fatalf("GetDefinition: %v", err)
 			}
 		})
 	}
 
-	for _, role := range []string{"platform_admin", "unknown"} {
-		t.Run(role, func(t *testing.T) {
+	for _, role := range []string{"unknown", ""} {
+		t.Run("denied_"+role, func(t *testing.T) {
 			recorder := &fakeAudit{}
 			service := NewService(store, recorder)
-			_, err := service.ListCatalogs(context.Background(), nil, Actor{UserID: uuid.New(), TenantID: uuid.New(), Role: role}, false)
-			if !errors.Is(err, ErrForbidden) {
-				t.Fatalf("err = %v, want ErrForbidden", err)
+			actor := Actor{UserID: uuid.New(), TenantID: uuid.New(), Role: role}
+			if _, err := service.ListCatalogs(context.Background(), nil, actor, false); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("ListCatalogs err = %v, want ErrForbidden", err)
+			}
+			if _, err := service.GetCatalog(context.Background(), nil, actor, uuid.New()); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("GetCatalog err = %v, want ErrForbidden", err)
+			}
+			if _, err := service.SearchDefinitions(context.Background(), nil, actor, DefinitionFilter{}); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("SearchDefinitions err = %v, want ErrForbidden", err)
+			}
+			if _, err := service.GetDefinition(context.Background(), nil, actor, uuid.New()); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("GetDefinition err = %v, want ErrForbidden", err)
 			}
 			if len(recorder.events) != 0 {
 				t.Errorf("audit events = %d, want none for a read-only denial", len(recorder.events))
+			}
+		})
+	}
+}
+
+func TestServiceTenantCatalogReadAccessExcludesPlatformAdmin(t *testing.T) {
+	// Tenant-bound contracts and rules stay tenant data. A platform admin gets
+	// no automatic access, even though it may read global catalogs.
+	for _, role := range []string{"platform_admin", "unknown"} {
+		t.Run(role, func(t *testing.T) {
+			service := NewService(&fakeStore{}, &fakeAudit{})
+			tenantID := uuid.New()
+			actor := Actor{UserID: uuid.New(), TenantID: tenantID, Role: role}
+			if _, err := service.ListContracts(context.Background(), nil, actor); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("ListContracts err = %v, want ErrForbidden", err)
+			}
+			if _, err := service.GetContract(context.Background(), nil, actor, uuid.New()); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("GetContract err = %v, want ErrForbidden", err)
+			}
+			if _, err := service.ListRules(context.Background(), nil, actor); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("ListRules err = %v, want ErrForbidden", err)
 			}
 		})
 	}

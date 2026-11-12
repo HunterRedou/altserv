@@ -153,13 +153,18 @@ func TestCatalogActivityHTTPFlow(t *testing.T) {
 			t.Fatalf("employee list-all status = %d, want 403", rec.Code)
 		}
 
-		// A platform admin gets no automatic access to activities or catalogs.
+		// A platform admin gets no automatic access to tenant activities or
+		// tenant-bound contracts and rules. Global catalogs are readable, but
+		// only a platform admin may create them (ADR-024).
 		adminLogin := loginAs(t, handler, admin.Email, "secret")
 		if rec := doRequest(handler, http.MethodGet, "/api/activities", "", adminLogin.cookie, ""); rec.Code != http.StatusForbidden {
 			t.Fatalf("admin list activities status = %d, want 403", rec.Code)
 		}
-		if rec := doRequest(handler, http.MethodGet, "/api/service-catalogs", "", adminLogin.cookie, ""); rec.Code != http.StatusForbidden {
-			t.Fatalf("admin list catalogs status = %d, want 403", rec.Code)
+		if rec := doRequest(handler, http.MethodGet, "/api/service-contracts", "", adminLogin.cookie, ""); rec.Code != http.StatusForbidden {
+			t.Fatalf("admin list contracts status = %d, want 403", rec.Code)
+		}
+		if rec := doRequest(handler, http.MethodGet, "/api/service-catalogs", "", adminLogin.cookie, ""); rec.Code != http.StatusOK {
+			t.Fatalf("admin list catalogs status = %d, want 200; body = %s", rec.Code, rec.Body.String())
 		}
 	})
 

@@ -116,6 +116,40 @@ report or billing transaction.
   live database; restore from backup if needed.
 - The append-only trigger still blocks ordinary deletes from `audit_events`.
 
+## Catalog administration after deploy
+
+- Migration `internal/db/sql/schema/026_catalog_administration.sql` adds
+  `create_service_catalog(...)` and `create_service_definition(...)`. Both are
+  `SECURITY DEFINER`, owned by the migration role and granted to `altserv_app`.
+  The application role keeps `SELECT` only on `service_catalogs` and
+  `service_definitions`.
+- Only a `platform_admin` may create a catalog or definition through the API.
+  A `chef` or `employee` gets `403`. Tenant contracts and activity rules keep
+  their existing rules.
+- A catalog requires a non-empty `source_note`. It records who verified the
+  data. Do not load an invented catalog.
+- A definition must sit inside its catalog window. When the catalog has an end
+  date, the definition needs one too and it must not extend past the catalog.
+- Bulk load with the operator tool:
+  ```bash
+  go run ./cmd/catalogimport -file catalog.json -tenant "$OPERATOR_TENANT_ID" -dry-run
+  go run ./cmd/catalogimport -file catalog.json -tenant "$OPERATOR_TENANT_ID"
+  ```
+  `DB_URL` must be a connection role that is a member of `altserv_app`. The
+  import runs in one transaction and writes one `catalog.imported` audit event.
+- The import tool has no logged-in user, so the audit actor user id is `NULL`.
+  Run it from a controlled operator account and keep the manifest in change
+  control.
+- Verify that only `platform_admin` can write:
+  ```sql
+  SELECT has_table_privilege('altserv_app', 'service_catalogs', 'INSERT'),
+         has_table_privilege('altserv_app', 'service_definitions', 'INSERT'),
+         has_function_privilege('altserv_app',
+           'create_service_catalog(text,text,text,text,timestamp,timestamp)',
+           'EXECUTE');
+  ```
+  The two table checks must be `false`; the function check must be `true`.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz

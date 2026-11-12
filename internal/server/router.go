@@ -42,8 +42,10 @@ type Handlers struct {
 	AssignmentRevoke        http.HandlerFunc
 
 	CatalogList           http.HandlerFunc
+	CatalogCreate         http.HandlerFunc
 	CatalogGet            http.HandlerFunc
 	DefinitionSearch      http.HandlerFunc
+	DefinitionCreate      http.HandlerFunc
 	DefinitionGet         http.HandlerFunc
 	ContractList          http.HandlerFunc
 	ContractGet           http.HandlerFunc
@@ -169,8 +171,10 @@ func NewRouter(h Handlers) http.Handler {
 	mux.Handle(RouteAssignments, protected(h.AssignmentList))
 	mux.Handle(RouteRevokeAssignment, protected(h.AssignmentRevoke))
 	mux.Handle(RouteServiceCatalogs, protected(h.CatalogList))
+	mux.Handle(RouteCreateServiceCatalog, protected(h.CatalogCreate))
 	mux.Handle(RouteServiceCatalog, protected(h.CatalogGet))
 	mux.Handle(RouteServiceDefinitions, protected(h.DefinitionSearch))
+	mux.Handle(RouteCreateServiceDefinition, protected(h.DefinitionCreate))
 	mux.Handle(RouteServiceDefinition, protected(h.DefinitionGet))
 	mux.Handle(RouteServiceContracts, protected(h.ContractList))
 	mux.Handle(RouteCreateServiceContract, protected(h.ContractCreate))

@@ -77,6 +77,44 @@ func (r *Repository) GetDefinition(ctx context.Context, q *db.Queries, id uuid.U
 	return toDefinition(row), nil
 }
 
+func (r *Repository) CreateCatalog(ctx context.Context, q *db.Queries, input CreateCatalogInput) (Catalog, error) {
+	row, err := q.CreateServiceCatalog(ctx, db.CreateServiceCatalogParams{
+		Code:       input.Code,
+		Name:       input.Name,
+		Region:     input.Region,
+		SourceNote: input.SourceNote,
+		ValidFrom:  input.ValidFrom,
+		ValidUntil: nullableTime(input.ValidUntil),
+	})
+	if isUniqueViolation(err) {
+		return Catalog{}, ErrConflict
+	}
+	if err != nil {
+		return Catalog{}, mapCatalogWriteError("create service catalog", err)
+	}
+	return toCatalog(row), nil
+}
+
+func (r *Repository) CreateDefinition(ctx context.Context, q *db.Queries, input CreateDefinitionInput) (Definition, error) {
+	row, err := q.CreateServiceDefinition(ctx, db.CreateServiceDefinitionParams{
+		CatalogID:   input.CatalogID,
+		Code:        input.Code,
+		Name:        input.Name,
+		Description: input.Description,
+		LegalArea:   input.LegalArea,
+		Unit:        input.Unit,
+		ValidFrom:   input.ValidFrom,
+		ValidUntil:  nullableTime(input.ValidUntil),
+	})
+	if isUniqueViolation(err) {
+		return Definition{}, ErrConflict
+	}
+	if err != nil {
+		return Definition{}, mapCatalogWriteError("create service definition", err)
+	}
+	return toDefinition(row), nil
+}
+
 func (r *Repository) CreateContract(ctx context.Context, q *db.Queries, tenantID uuid.UUID, input CreateContractInput) (Contract, error) {
 	row, err := q.CreateTenantServiceContract(ctx, db.CreateTenantServiceContractParams{
 		TenantID:            tenantID,
@@ -250,6 +288,22 @@ func timePtr(value sql.NullTime) *time.Time {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// mapCatalogWriteError translates the SQLSTATE codes raised by the reviewed
+// catalog functions into domain errors. 22023 is invalid_parameter_value and
+// 23503 is foreign_key_violation (the catalog does not exist).
+func mapCatalogWriteError(operation string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "22023":
+			return fmt.Errorf("%w: %s", ErrInvalid, pgErr.Message)
+		case "23503":
+			return fmt.Errorf("%w: catalog not found", ErrNotFound)
+		}
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 // normalizeQuery trims a search term and collapses internal whitespace so the

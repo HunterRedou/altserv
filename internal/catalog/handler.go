@@ -100,6 +100,56 @@ func (h *Handler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	server.RespondWithJSON(w, http.StatusOK, toCatalogResponse(catalog))
 }
 
+type createCatalogRequest struct {
+	Code       string  `json:"code"`
+	Name       string  `json:"name"`
+	Region     string  `json:"region"`
+	SourceNote string  `json:"source_note"`
+	ValidFrom  string  `json:"valid_from"`
+	ValidUntil *string `json:"valid_until"`
+}
+
+// CreateCatalog handles POST /api/service-catalogs. Only a platform admin may
+// create a global catalog version.
+func (h *Handler) CreateCatalog(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actorFromContext(r.Context())
+	if !ok {
+		server.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	var req createCatalogRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondWithError(w, http.StatusBadRequest, "Couldn't decode parameters", err)
+		return
+	}
+
+	validFrom, validUntil, ok := parseValidityWindow(w, req.ValidFrom, req.ValidUntil)
+	if !ok {
+		return
+	}
+
+	var catalog Catalog
+	err := h.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		var err error
+		catalog, err = h.service.CreateCatalog(r.Context(), q, actor, h.currentRequestID(r.Context()), CreateCatalogInput{
+			Code:       req.Code,
+			Name:       req.Name,
+			Region:     req.Region,
+			SourceNote: req.SourceNote,
+			ValidFrom:  validFrom,
+			ValidUntil: validUntil,
+		})
+		return err
+	})
+	if err != nil {
+		respondCatalogError(w, err)
+		return
+	}
+
+	server.RespondWithJSON(w, http.StatusCreated, toCatalogResponse(catalog))
+}
+
 // SearchDefinitions handles GET /api/service-definitions. The q term is read
 // from the query string only and never logged (doc 10).
 func (h *Handler) SearchDefinitions(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +212,92 @@ func (h *Handler) GetDefinition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.RespondWithJSON(w, http.StatusOK, toDefinitionResponse(definition))
+}
+
+type createDefinitionRequest struct {
+	CatalogID   string  `json:"catalog_id"`
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	LegalArea   string  `json:"legal_area"`
+	Unit        string  `json:"unit"`
+	ValidFrom   string  `json:"valid_from"`
+	ValidUntil  *string `json:"valid_until"`
+}
+
+// CreateDefinition handles POST /api/service-definitions. Only a platform admin
+// may add a billable service to a global catalog version.
+func (h *Handler) CreateDefinition(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actorFromContext(r.Context())
+	if !ok {
+		server.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	var req createDefinitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondWithError(w, http.StatusBadRequest, "Couldn't decode parameters", err)
+		return
+	}
+
+	catalogID, err := uuid.Parse(req.CatalogID)
+	if err != nil {
+		server.RespondWithError(w, http.StatusBadRequest, "catalog_id must be a UUID", nil)
+		return
+	}
+
+	validFrom, validUntil, ok := parseValidityWindow(w, req.ValidFrom, req.ValidUntil)
+	if !ok {
+		return
+	}
+
+	var definition Definition
+	err = h.withTenant(r.Context(), actor.TenantID, func(q *db.Queries) error {
+		var err error
+		definition, err = h.service.CreateDefinition(r.Context(), q, actor, h.currentRequestID(r.Context()), CreateDefinitionInput{
+			CatalogID:   catalogID,
+			Code:        req.Code,
+			Name:        req.Name,
+			Description: req.Description,
+			LegalArea:   req.LegalArea,
+			Unit:        req.Unit,
+			ValidFrom:   validFrom,
+			ValidUntil:  validUntil,
+		})
+		return err
+	})
+	if err != nil {
+		respondCatalogError(w, err)
+		return
+	}
+
+	server.RespondWithJSON(w, http.StatusCreated, toDefinitionResponse(definition))
+}
+
+// parseValidityWindow parses the RFC3339 validity window shared by the catalog
+// and definition create handlers. It writes a 400 response on a bad value.
+func parseValidityWindow(w http.ResponseWriter, rawFrom string, rawUntil *string) (time.Time, *time.Time, bool) {
+	var validFrom time.Time
+	if rawFrom != "" {
+		parsed, err := time.Parse(time.RFC3339, rawFrom)
+		if err != nil {
+			server.RespondWithError(w, http.StatusBadRequest, "valid_from must be RFC3339", nil)
+			return time.Time{}, nil, false
+		}
+		validFrom = parsed
+	}
+
+	var validUntil *time.Time
+	if rawUntil != nil && *rawUntil != "" {
+		parsed, err := time.Parse(time.RFC3339, *rawUntil)
+		if err != nil {
+			server.RespondWithError(w, http.StatusBadRequest, "valid_until must be RFC3339", nil)
+			return time.Time{}, nil, false
+		}
+		validUntil = &parsed
+	}
+
+	return validFrom, validUntil, true
 }
 
 // ListContracts handles GET /api/service-contracts.
@@ -393,7 +529,7 @@ func respondCatalogError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		server.RespondWithError(w, http.StatusNotFound, "Not found", nil)
 	case errors.Is(err, ErrConflict):
-		server.RespondWithError(w, http.StatusConflict, "Contract version already exists", nil)
+		server.RespondWithError(w, http.StatusConflict, "Version already exists", nil)
 	default:
 		server.RespondWithError(w, http.StatusInternalServerError, "Service operation failed", err)
 	}

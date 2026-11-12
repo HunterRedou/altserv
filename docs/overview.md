@@ -747,6 +747,7 @@ See `docs/decisions/ADR-022-retention-deletion.md`.
 | Step 3: break-glass access for `platform_admin` | Complete |
 | Step 4: retention review and patient deletion | Complete |
 | Step 5: tenant termination | Complete |
+| Catalog administration and verified catalog import | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -779,9 +780,12 @@ The following checks pass:
 - `go test ./...` passes.
 - `TEST_DB_URL=... go test -race ./...` passes.
 - Migrations `internal/db/sql/schema/021_audit_hardening.sql`,
-  `internal/db/sql/schema/022_auth_hardening.sql` and
-  `internal/db/sql/schema/023_break_glass.sql` are applied to the development
-  and test databases. Goose version is 24.
+  `internal/db/sql/schema/022_auth_hardening.sql`,
+  `internal/db/sql/schema/023_break_glass.sql`,
+  `internal/db/sql/schema/024_retention_deletion.sql`,
+  `internal/db/sql/schema/025_tenant_termination.sql` and
+  `internal/db/sql/schema/026_catalog_administration.sql` are applied to the
+  development and test databases. Goose version is 26.
 - The deployment YAML and JSON files are valid.
 - `docker compose config` passes.
 - All compliance links and file references resolve.
@@ -802,6 +806,8 @@ These are real gaps. They are not open design questions.
 9. `platform_admin` is tenant-bound. There is no cross-tenant support API.
 10. No shared rate-limit store for multi-instance deployments.
 11. The Compose file is a template, not a production orchestrator.
+12. No real Brandenburg catalog data is loaded. Test catalogs must stay clearly
+    labelled until a domain expert verifies the real data.
 
 ---
 
@@ -829,6 +835,9 @@ step 2 are complete.
 8. **Extend the support model.** Decide how a `platform_admin` supports another
    tenant beyond one named patient. Add a tenant-wide grant or a cross-tenant
    support API only with a documented legal basis.
+9. **Load verified catalog data.** Have a domain expert verify a real
+   Brandenburg catalog, then import it with `cmd/catalogimport`. Keep the source
+   note on the catalog and never load invented codes.
 
 ---
 
@@ -836,7 +845,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-023. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-024. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |

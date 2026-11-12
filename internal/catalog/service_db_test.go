@@ -171,6 +171,297 @@ func newCatalogTx(t *testing.T, conn *sql.DB) (*sql.Tx, *db.Queries) {
 	return tx, db.New(tx)
 }
 
+// TestCatalogAdministrationDatabase covers the reviewed SECURITY DEFINER write
+// path for global catalogs: platform-admin-only access, provenance, catalog
+// window containment, duplicate versions and the audit event. It is skipped
+// unless TEST_DB_URL is set.
+func TestCatalogAdministrationDatabase(t *testing.T) {
+	dbURL := os.Getenv("TEST_DB_URL")
+	if dbURL == "" {
+		t.Skip("TEST_DB_URL not set; skipping database integration test")
+	}
+
+	conn, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.Ping(); err != nil {
+		t.Skipf("database not reachable: %v", err)
+	}
+
+	service := NewService(NewRepository(), audit.SQLRecorder{})
+	ctx := context.Background()
+
+	t.Run("platform admin creates a catalog and a definition", func(t *testing.T) {
+		tx, queries := newCatalogTx(t, conn)
+		defer tx.Rollback()
+
+		tenant, admin := seedPlatformAdmin(t, queries)
+		validFrom := time.Now().Add(-time.Hour).Truncate(time.Second)
+		validUntil := validFrom.AddDate(1, 0, 0)
+
+		var catalog Catalog
+		if err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			var err error
+			catalog, err = service.CreateCatalog(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req-cat", CreateCatalogInput{
+				Code:       "BRB-2026",
+				Name:       "Brandenburger Leistungskatalog",
+				Region:     "brandenburg",
+				SourceNote: "Fachlich geprueft, Quelle: Test",
+				ValidFrom:  validFrom,
+				ValidUntil: &validUntil,
+			})
+			return err
+		}); err != nil {
+			t.Fatalf("create catalog: %v", err)
+		}
+		if catalog.ID == uuid.Nil || catalog.Code != "BRB-2026" {
+			t.Fatalf("catalog = %+v, want persisted row", catalog)
+		}
+
+		var definition Definition
+		if err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			var err error
+			definition, err = service.CreateDefinition(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req-def", CreateDefinitionInput{
+				CatalogID:  catalog.ID,
+				Code:       "LK-001",
+				Name:       "Grundpflege",
+				LegalArea:  "sgb_xi",
+				Unit:       "Einsatz",
+				ValidFrom:  validFrom,
+				ValidUntil: &validUntil,
+			})
+			return err
+		}); err != nil {
+			t.Fatalf("create definition: %v", err)
+		}
+		if definition.CatalogID != catalog.ID || definition.Code != "LK-001" {
+			t.Fatalf("definition = %+v, want persisted row", definition)
+		}
+
+		var count int
+		if err := tx.QueryRow(
+			`SELECT count(*) FROM audit_events
+			 WHERE tenant_id = $1 AND action IN ('service_catalog.created', 'service_definition.created')`,
+			tenant.ID,
+		).Scan(&count); err != nil {
+			t.Fatalf("count audit events: %v", err)
+		}
+		if count != 2 {
+			t.Errorf("audit events = %d, want 2", count)
+		}
+	})
+
+	t.Run("tenant roles cannot create global catalogs", func(t *testing.T) {
+		tx, queries := newCatalogTx(t, conn)
+		defer tx.Rollback()
+
+		tenant, chef := seedCatalogTenantAndUser(t, queries)
+		err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			_, err := service.CreateCatalog(ctx, q, Actor{UserID: chef.ID, TenantID: tenant.ID, Role: "chef"}, "req", CreateCatalogInput{
+				Code:       "BRB-2026",
+				Name:       "Katalog",
+				SourceNote: "Quelle",
+				ValidFrom:  time.Now().Add(-time.Hour),
+			})
+			return err
+		})
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("err = %v, want ErrForbidden", err)
+		}
+
+		var count int
+		if err := tx.QueryRow(`SELECT count(*) FROM service_catalogs WHERE code = 'BRB-2026'`).Scan(&count); err != nil {
+			t.Fatalf("count catalogs: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("catalog rows = %d, want 0", count)
+		}
+	})
+
+	t.Run("duplicate catalog version conflicts", func(t *testing.T) {
+		tx, queries := newCatalogTx(t, conn)
+		defer tx.Rollback()
+
+		tenant, admin := seedPlatformAdmin(t, queries)
+		validFrom := time.Now().Add(-time.Hour).Truncate(time.Second)
+		input := CreateCatalogInput{
+			Code:       "BRB-2026",
+			Name:       "Katalog",
+			SourceNote: "Quelle",
+			ValidFrom:  validFrom,
+		}
+
+		if err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			_, err := service.CreateCatalog(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req", input)
+			return err
+		}); err != nil {
+			t.Fatalf("first create: %v", err)
+		}
+
+		err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			_, err := service.CreateCatalog(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req", input)
+			return err
+		})
+		if !errors.Is(err, ErrConflict) {
+			t.Fatalf("duplicate err = %v, want ErrConflict", err)
+		}
+	})
+
+	t.Run("catalog requires a source note", func(t *testing.T) {
+		tx, queries := newCatalogTx(t, conn)
+		defer tx.Rollback()
+
+		tenant, admin := seedPlatformAdmin(t, queries)
+		err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			_, err := service.CreateCatalog(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req", CreateCatalogInput{
+				Code:      "BRB-2026",
+				Name:      "Katalog",
+				ValidFrom: time.Now().Add(-time.Hour),
+			})
+			return err
+		})
+		if !errors.Is(err, ErrInvalid) {
+			t.Fatalf("err = %v, want ErrInvalid", err)
+		}
+	})
+
+	t.Run("definition must stay inside the catalog window", func(t *testing.T) {
+		validFrom := time.Now().Add(-time.Hour).Truncate(time.Second)
+		validUntil := validFrom.AddDate(1, 0, 0)
+
+		t.Run("open-ended definition is rejected", func(t *testing.T) {
+			tx, queries := newCatalogTx(t, conn)
+			defer tx.Rollback()
+
+			tenant, admin := seedPlatformAdmin(t, queries)
+			actor := Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}
+
+			var catalog Catalog
+			if err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+				var err error
+				catalog, err = service.CreateCatalog(ctx, q, actor, "req", CreateCatalogInput{
+					Code:       "BRB-2026",
+					Name:       "Katalog",
+					SourceNote: "Quelle",
+					ValidFrom:  validFrom,
+					ValidUntil: &validUntil,
+				})
+				return err
+			}); err != nil {
+				t.Fatalf("create catalog: %v", err)
+			}
+
+			// A definition without an end date is open-ended and would outlive
+			// the catalog, so it must be rejected.
+			err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+				_, err := service.CreateDefinition(ctx, q, actor, "req", CreateDefinitionInput{
+					CatalogID: catalog.ID,
+					Code:      "LK-001",
+					Name:      "Grundpflege",
+					LegalArea: "sgb_xi",
+					ValidFrom: validFrom,
+				})
+				return err
+			})
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("open-ended definition err = %v, want ErrInvalid", err)
+			}
+		})
+
+		t.Run("definition before the catalog is rejected", func(t *testing.T) {
+			tx, queries := newCatalogTx(t, conn)
+			defer tx.Rollback()
+
+			tenant, admin := seedPlatformAdmin(t, queries)
+			actor := Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}
+
+			var catalog Catalog
+			if err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+				var err error
+				catalog, err = service.CreateCatalog(ctx, q, actor, "req", CreateCatalogInput{
+					Code:       "BRB-2026",
+					Name:       "Katalog",
+					SourceNote: "Quelle",
+					ValidFrom:  validFrom,
+					ValidUntil: &validUntil,
+				})
+				return err
+			}); err != nil {
+				t.Fatalf("create catalog: %v", err)
+			}
+
+			err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+				_, err := service.CreateDefinition(ctx, q, actor, "req", CreateDefinitionInput{
+					CatalogID:  catalog.ID,
+					Code:       "LK-001",
+					Name:       "Grundpflege",
+					LegalArea:  "sgb_xi",
+					ValidFrom:  validFrom.Add(-time.Hour),
+					ValidUntil: &validUntil,
+				})
+				return err
+			})
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("early definition err = %v, want ErrInvalid", err)
+			}
+		})
+	})
+
+	t.Run("definition needs an existing catalog", func(t *testing.T) {
+		tx, queries := newCatalogTx(t, conn)
+		defer tx.Rollback()
+
+		tenant, admin := seedPlatformAdmin(t, queries)
+		err := db.WithTenantTx(ctx, tx, tenant.ID, func(q *db.Queries) error {
+			_, err := service.CreateDefinition(ctx, q, Actor{UserID: admin.ID, TenantID: tenant.ID, Role: "platform_admin"}, "req", CreateDefinitionInput{
+				CatalogID: uuid.New(),
+				Code:      "LK-001",
+				Name:      "Grundpflege",
+				LegalArea: "sgb_xi",
+				ValidFrom: time.Now().Add(-time.Hour),
+			})
+			return err
+		})
+		if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound", err)
+		}
+	})
+}
+
+func seedPlatformAdmin(t *testing.T, queries *db.Queries) (db.Tenant, db.User) {
+	t.Helper()
+
+	ctx := context.Background()
+	tenant, err := queries.CreateTenant(ctx, db.CreateTenantParams{
+		Email:          "admin-" + uuid.NewString() + "@example.com",
+		Ustid:          "DE123456789",
+		Streetname:     "Teststrasse 1",
+		Plz:            "10115",
+		HashedPassword: "unused",
+	})
+	if err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+	tenant, err = queries.UpdateTenantStatus(ctx, db.UpdateTenantStatusParams{ID: tenant.ID, Status: "valid"})
+	if err != nil {
+		t.Fatalf("set tenant status: %v", err)
+	}
+	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Name:           "platform admin",
+		Role:           "platform_admin",
+		HashedPassword: "hash",
+		Email:          "admin-" + uuid.NewString() + "@example.com",
+		TenantID:       tenant.ID,
+	})
+	if err != nil {
+		t.Fatalf("create platform admin: %v", err)
+	}
+	return tenant, user
+}
+
 func seedCatalogTenantAndUser(t *testing.T, queries *db.Queries) (db.Tenant, db.User) {
 	t.Helper()
 

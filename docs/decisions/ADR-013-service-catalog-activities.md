@@ -1,5 +1,11 @@
 # ADR-013: Service catalog, contracts and activity snapshots
 
+> **Superseded in part by ADR-024.** Global catalogs and definitions are now
+> readable by every authenticated role, and only `platform_admin` may create
+> them through the reviewed functions from ADR-024. The rules below for
+> tenant-bound contracts and activity rules stay in force, including that
+> `platform_admin` has no automatic access to tenant data.
+
 ## Problem
 Care activities must be billable and reportable. The billable service, its legal
 area (SGB XI or SGB V) and the payer contract come from reference data that is
@@ -38,9 +44,11 @@ share the legal area and be valid at `performed_at`.
 
 Access rules:
 
-- `chef` and `employee` may read global catalogs and definitions.
-- `platform_admin` gets no automatic catalog or activity access (ADR-004 and the
-  platform-admin reminder).
+- `chef` and `employee` may read global catalogs and definitions. ADR-024 adds
+  `platform_admin` read access to global catalogs and makes it the only role
+  that may create them.
+- `platform_admin` gets no automatic access to tenant contracts, activity rules
+  or patient data (ADR-004 and the platform-admin reminder).
 - Only a `chef` may create contracts or activity rules.
 - `chef` reads activities tenant-wide; `employee` reads activities only for
   currently assigned patients.

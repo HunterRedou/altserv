@@ -7,9 +7,109 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const createServiceCatalog = `-- name: CreateServiceCatalog :one
+SELECT id, code, name, region, source_note, valid_from, valid_until, created_at, updated_at FROM create_service_catalog(
+  $1::text,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::timestamp,
+  $6::timestamp
+)
+`
+
+type CreateServiceCatalogParams struct {
+	Code       string
+	Name       string
+	Region     string
+	SourceNote string
+	ValidFrom  time.Time
+	ValidUntil sql.NullTime
+}
+
+// Global reference data is written only through the reviewed SECURITY DEFINER
+// functions from migration 026. The application role has SELECT only.
+func (q *Queries) CreateServiceCatalog(ctx context.Context, arg CreateServiceCatalogParams) (ServiceCatalog, error) {
+	row := q.db.QueryRowContext(ctx, createServiceCatalog,
+		arg.Code,
+		arg.Name,
+		arg.Region,
+		arg.SourceNote,
+		arg.ValidFrom,
+		arg.ValidUntil,
+	)
+	var i ServiceCatalog
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Region,
+		&i.SourceNote,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createServiceDefinition = `-- name: CreateServiceDefinition :one
+SELECT id, catalog_id, code, name, description, legal_area, unit, valid_from, valid_until, created_at, updated_at FROM create_service_definition(
+  $1::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::text,
+  $6::text,
+  $7::timestamp,
+  $8::timestamp
+)
+`
+
+type CreateServiceDefinitionParams struct {
+	CatalogID   uuid.UUID
+	Code        string
+	Name        string
+	Description string
+	LegalArea   string
+	Unit        string
+	ValidFrom   time.Time
+	ValidUntil  sql.NullTime
+}
+
+func (q *Queries) CreateServiceDefinition(ctx context.Context, arg CreateServiceDefinitionParams) (ServiceDefinition, error) {
+	row := q.db.QueryRowContext(ctx, createServiceDefinition,
+		arg.CatalogID,
+		arg.Code,
+		arg.Name,
+		arg.Description,
+		arg.LegalArea,
+		arg.Unit,
+		arg.ValidFrom,
+		arg.ValidUntil,
+	)
+	var i ServiceDefinition
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.LegalArea,
+		&i.Unit,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const getServiceCatalog = `-- name: GetServiceCatalog :one
 SELECT id, code, name, region, source_note, valid_from, valid_until, created_at, updated_at FROM service_catalogs

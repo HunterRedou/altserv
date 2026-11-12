@@ -52,6 +52,31 @@ type Contract struct {
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
+// CreateCatalogInput is the validated input for a new catalog version. Global
+// catalogs are created by a platform admin through the reviewed SECURITY
+// DEFINER functions; the application role has no direct write access.
+type CreateCatalogInput struct {
+	Code       string
+	Name       string
+	Region     string
+	SourceNote string
+	ValidFrom  time.Time
+	ValidUntil *time.Time
+}
+
+// CreateDefinitionInput is the validated input for a new billable service
+// inside a catalog version.
+type CreateDefinitionInput struct {
+	CatalogID   uuid.UUID
+	Code        string
+	Name        string
+	Description string
+	LegalArea   string
+	Unit        string
+	ValidFrom   time.Time
+	ValidUntil  *time.Time
+}
+
 // CreateContractInput is the validated input for a new contract version.
 type CreateContractInput struct {
 	ServiceDefinitionID uuid.UUID

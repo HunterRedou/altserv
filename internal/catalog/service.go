@@ -30,6 +30,15 @@ const (
 	maxPayerNameRunes     = 200
 	maxReferenceRunes     = 200
 	maxActivityLabelRunes = 200
+
+	maxCatalogCodeRunes    = 100
+	maxCatalogNameRunes    = 300
+	maxRegionRunes         = 100
+	maxSourceNoteRunes     = 1000
+	maxDefinitionCodeRunes = 100
+	maxDefinitionNameRunes = 300
+	maxDefinitionDescRunes = 2000
+	maxDefinitionUnitRunes = 50
 )
 
 // Store is the persistence boundary used by the catalog service.
@@ -38,6 +47,8 @@ type Store interface {
 	GetCatalog(ctx context.Context, q *db.Queries, id uuid.UUID) (Catalog, error)
 	SearchDefinitions(ctx context.Context, q *db.Queries, filter DefinitionFilter, limit int) ([]Definition, error)
 	GetDefinition(ctx context.Context, q *db.Queries, id uuid.UUID) (Definition, error)
+	CreateCatalog(ctx context.Context, q *db.Queries, input CreateCatalogInput) (Catalog, error)
+	CreateDefinition(ctx context.Context, q *db.Queries, input CreateDefinitionInput) (Definition, error)
 	CreateContract(ctx context.Context, q *db.Queries, tenantID uuid.UUID, input CreateContractInput) (Contract, error)
 	GetContract(ctx context.Context, q *db.Queries, tenantID, id uuid.UUID) (Contract, error)
 	ListContracts(ctx context.Context, q *db.Queries, tenantID uuid.UUID) ([]Contract, error)
@@ -60,7 +71,7 @@ func NewService(store Store, recorder audit.Recorder) *Service {
 // ListCatalogs returns the global reference catalogs. Only the currently valid
 // versions are returned unless includeFuture is set.
 func (s *Service) ListCatalogs(ctx context.Context, q *db.Queries, actor Actor, includeFuture bool) ([]Catalog, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadGlobalCatalog(actor.Role) {
 		return nil, ErrForbidden
 	}
 	return s.store.ListCatalogs(ctx, q, includeFuture)
@@ -68,7 +79,7 @@ func (s *Service) ListCatalogs(ctx context.Context, q *db.Queries, actor Actor, 
 
 // GetCatalog returns one catalog version.
 func (s *Service) GetCatalog(ctx context.Context, q *db.Queries, actor Actor, id uuid.UUID) (Catalog, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadGlobalCatalog(actor.Role) {
 		return Catalog{}, ErrForbidden
 	}
 	return s.store.GetCatalog(ctx, q, id)
@@ -76,7 +87,7 @@ func (s *Service) GetCatalog(ctx context.Context, q *db.Queries, actor Actor, id
 
 // SearchDefinitions runs the ILIKE service search with relevance ordering.
 func (s *Service) SearchDefinitions(ctx context.Context, q *db.Queries, actor Actor, filter DefinitionFilter) ([]Definition, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadGlobalCatalog(actor.Role) {
 		return nil, ErrForbidden
 	}
 
@@ -89,10 +100,96 @@ func (s *Service) SearchDefinitions(ctx context.Context, q *db.Queries, actor Ac
 
 // GetDefinition returns one billable service.
 func (s *Service) GetDefinition(ctx context.Context, q *db.Queries, actor Actor, id uuid.UUID) (Definition, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadGlobalCatalog(actor.Role) {
 		return Definition{}, ErrForbidden
 	}
 	return s.store.GetDefinition(ctx, q, id)
+}
+
+// CreateCatalog adds a global catalog version. Only a platform admin may do
+// this. The catalog is shared reference data, not tenant data (doc 9).
+func (s *Service) CreateCatalog(ctx context.Context, q *db.Queries, actor Actor, requestID string, input CreateCatalogInput) (Catalog, error) {
+	if !canWriteGlobalCatalog(actor.Role) {
+		s.recordDenied(ctx, q, actor, requestID, "service_catalog.create")
+		return Catalog{}, ErrForbidden
+	}
+
+	catalog, err := s.createCatalog(ctx, q, input)
+	if err != nil {
+		return Catalog{}, err
+	}
+
+	if err := s.record(ctx, q, audit.Event{
+		TenantID:    actor.TenantID,
+		ActorUserID: actor.UserID,
+		Action:      "service_catalog.created",
+		EntityType:  "service_catalog",
+		EntityID:    catalog.ID,
+		RequestID:   requestID,
+		Metadata: map[string]any{
+			"code":            catalog.Code,
+			"region":          catalog.Region,
+			"valid_from":      catalog.ValidFrom,
+			"has_valid_until": catalog.ValidUntil != nil,
+			"has_source_note": catalog.SourceNote != "",
+		},
+	}); err != nil {
+		return Catalog{}, err
+	}
+	return catalog, nil
+}
+
+// CreateDefinition adds one billable service to a catalog version. Only a
+// platform admin may do this. The database function checks the catalog window.
+func (s *Service) CreateDefinition(ctx context.Context, q *db.Queries, actor Actor, requestID string, input CreateDefinitionInput) (Definition, error) {
+	if !canWriteGlobalCatalog(actor.Role) {
+		s.recordDenied(ctx, q, actor, requestID, "service_definition.create")
+		return Definition{}, ErrForbidden
+	}
+
+	definition, err := s.createDefinition(ctx, q, input)
+	if err != nil {
+		return Definition{}, err
+	}
+
+	if err := s.record(ctx, q, audit.Event{
+		TenantID:    actor.TenantID,
+		ActorUserID: actor.UserID,
+		Action:      "service_definition.created",
+		EntityType:  "service_definition",
+		EntityID:    definition.ID,
+		RequestID:   requestID,
+		Metadata: map[string]any{
+			"catalog_id":      definition.CatalogID,
+			"code":            definition.Code,
+			"legal_area":      definition.LegalArea,
+			"valid_from":      definition.ValidFrom,
+			"has_valid_until": definition.ValidUntil != nil,
+		},
+	}); err != nil {
+		return Definition{}, err
+	}
+	return definition, nil
+}
+
+// createCatalog validates and stores one catalog version without an audit
+// event. The caller decides how to audit a single create or a bulk import.
+func (s *Service) createCatalog(ctx context.Context, q *db.Queries, input CreateCatalogInput) (Catalog, error) {
+	normalized, err := validateCatalogInput(input)
+	if err != nil {
+		return Catalog{}, err
+	}
+	return s.store.CreateCatalog(ctx, q, normalized)
+}
+
+// createDefinition validates and stores one service definition without an
+// audit event.
+func (s *Service) createDefinition(ctx context.Context, q *db.Queries, input CreateDefinitionInput) (Definition, error) {
+	normalized, err := validateDefinitionInput(input)
+	if err != nil {
+		return Definition{}, err
+	}
+	return s.store.CreateDefinition(ctx, q, normalized)
 }
 
 // CreateContract adds a tenant contract version. Only a chef may do this, and
@@ -148,7 +245,7 @@ func (s *Service) CreateContract(ctx context.Context, q *db.Queries, actor Actor
 
 // GetContract returns one tenant contract.
 func (s *Service) GetContract(ctx context.Context, q *db.Queries, actor Actor, id uuid.UUID) (Contract, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadTenantCatalog(actor.Role) {
 		return Contract{}, ErrForbidden
 	}
 	return s.store.GetContract(ctx, q, actor.TenantID, id)
@@ -156,7 +253,7 @@ func (s *Service) GetContract(ctx context.Context, q *db.Queries, actor Actor, i
 
 // ListContracts returns every contract version of the tenant.
 func (s *Service) ListContracts(ctx context.Context, q *db.Queries, actor Actor) ([]Contract, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadTenantCatalog(actor.Role) {
 		return nil, ErrForbidden
 	}
 	return s.store.ListContracts(ctx, q, actor.TenantID)
@@ -228,16 +325,28 @@ func (s *Service) CreateRule(ctx context.Context, q *db.Queries, actor Actor, re
 
 // ListRules returns the tenant activity-service rules.
 func (s *Service) ListRules(ctx context.Context, q *db.Queries, actor Actor) ([]Rule, error) {
-	if !canReadCatalog(actor.Role) {
+	if !canReadTenantCatalog(actor.Role) {
 		return nil, ErrForbidden
 	}
 	return s.store.ListRules(ctx, q, actor.TenantID)
 }
 
-// canReadCatalog allows the two tenant roles that record or plan care. A
-// platform admin gets no automatic tenant data access (doc 4).
-func canReadCatalog(role string) bool {
+// canReadGlobalCatalog allows every authenticated role to read the shared
+// reference catalog. Catalog data is not patient data (doc 4).
+func canReadGlobalCatalog(role string) bool {
+	return role == "chef" || role == "employee" || role == "platform_admin"
+}
+
+// canReadTenantCatalog keeps tenant-bound contracts and rules to the tenant
+// roles. A platform admin gets no automatic tenant data access (doc 4).
+func canReadTenantCatalog(role string) bool {
 	return role == "chef" || role == "employee"
+}
+
+// canWriteGlobalCatalog is platform-admin only. A tenant role must never write
+// shared reference data, or one tenant could change another tenant's catalog.
+func canWriteGlobalCatalog(role string) bool {
+	return role == "platform_admin"
 }
 
 func validateFilter(filter DefinitionFilter) (DefinitionFilter, error) {
@@ -253,6 +362,97 @@ func validateFilter(filter DefinitionFilter) (DefinitionFilter, error) {
 	}
 
 	return filter, nil
+}
+
+func validateCatalogInput(input CreateCatalogInput) (CreateCatalogInput, error) {
+	input.Code = strings.TrimSpace(input.Code)
+	input.Name = strings.TrimSpace(input.Name)
+	input.Region = strings.TrimSpace(input.Region)
+	input.SourceNote = strings.TrimSpace(input.SourceNote)
+
+	if input.Code == "" {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog code is required", ErrInvalid)
+	}
+	if len([]rune(input.Code)) > maxCatalogCodeRunes {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog code is too long", ErrInvalid)
+	}
+	if input.Name == "" {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog name is required", ErrInvalid)
+	}
+	if len([]rune(input.Name)) > maxCatalogNameRunes {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog name is too long", ErrInvalid)
+	}
+	if input.Region == "" {
+		input.Region = "brandenburg"
+	}
+	if len([]rune(input.Region)) > maxRegionRunes {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog region is too long", ErrInvalid)
+	}
+	// A catalog without a source note cannot be checked. Reject it so an
+	// unverified or invented catalog cannot be loaded (doc 9).
+	if input.SourceNote == "" {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog source note is required", ErrInvalid)
+	}
+	if len([]rune(input.SourceNote)) > maxSourceNoteRunes {
+		return CreateCatalogInput{}, fmt.Errorf("%w: catalog source note is too long", ErrInvalid)
+	}
+	if input.ValidFrom.IsZero() {
+		return CreateCatalogInput{}, fmt.Errorf("%w: valid_from is required", ErrInvalid)
+	}
+	if input.ValidUntil != nil && !input.ValidUntil.After(input.ValidFrom) {
+		return CreateCatalogInput{}, fmt.Errorf("%w: valid_until must be after valid_from", ErrInvalid)
+	}
+
+	return input, nil
+}
+
+func validateDefinitionInput(input CreateDefinitionInput) (CreateDefinitionInput, error) {
+	if input.CatalogID == uuid.Nil {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: catalog is required", ErrInvalid)
+	}
+	return validateDefinitionFields(input)
+}
+
+// validateDefinitionFields checks everything except the catalog id. The import
+// plan uses it before the catalog id is known.
+func validateDefinitionFields(input CreateDefinitionInput) (CreateDefinitionInput, error) {
+	input.Code = strings.TrimSpace(input.Code)
+	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
+	input.LegalArea = strings.TrimSpace(input.LegalArea)
+	input.Unit = strings.TrimSpace(input.Unit)
+
+	if input.Code == "" {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service code is required", ErrInvalid)
+	}
+	if len([]rune(input.Code)) > maxDefinitionCodeRunes {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service code is too long", ErrInvalid)
+	}
+	if input.Name == "" {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service name is required", ErrInvalid)
+	}
+	if len([]rune(input.Name)) > maxDefinitionNameRunes {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service name is too long", ErrInvalid)
+	}
+	if len([]rune(input.Description)) > maxDefinitionDescRunes {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service description is too long", ErrInvalid)
+	}
+	switch input.LegalArea {
+	case "sgb_xi", "sgb_v":
+	default:
+		return CreateDefinitionInput{}, fmt.Errorf("%w: legal area %q is not allowed", ErrInvalid, input.LegalArea)
+	}
+	if len([]rune(input.Unit)) > maxDefinitionUnitRunes {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: service unit is too long", ErrInvalid)
+	}
+	if input.ValidFrom.IsZero() {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: valid_from is required", ErrInvalid)
+	}
+	if input.ValidUntil != nil && !input.ValidUntil.After(input.ValidFrom) {
+		return CreateDefinitionInput{}, fmt.Errorf("%w: valid_until must be after valid_from", ErrInvalid)
+	}
+
+	return input, nil
 }
 
 func validateContractInput(input CreateContractInput) (CreateContractInput, error) {
