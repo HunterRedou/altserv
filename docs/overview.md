@@ -253,6 +253,11 @@ the security depends on.
 - The same activity cannot be billed twice.
 - A stale optimistic-lock version is rejected.
 
+The cross-cutting suites live under `tests/`: `tests/integration` proves that
+packages work together, `tests/security` holds the negative authorization and
+crypto cases, and `tests/e2e` is a black-box smoke test against a running
+process. `tests/README.md` maps every critical case above to its test.
+
 ### How to run
 
 ```
@@ -263,6 +268,12 @@ go test ./...
 
 TEST_DB_URL=postgres://.../altserv_test?sslmode=disable \
   go test -race ./...
+
+TEST_DB_URL=postgres://.../altserv_test?sslmode=disable \
+  go test ./tests/integration/... ./tests/security/...
+
+E2E_BASE_URL=https://staging.example.invalid \
+  go test ./tests/e2e/...
 ```
 
 The database tests skip when `TEST_DB_URL` is empty. A production check must run
@@ -271,7 +282,10 @@ them with a real database.
 ### Files
 
 - `*_test.go` in the root package and in every `internal/` package
+- `tests/integration/`, `tests/security/`, `tests/e2e/` and `tests/testutil/`
+- `tests/README.md` (test layout and critical-case map)
 - `internal/db/sql/schema/migrations_test.go`
+- `cmd/loadgen/main.go`
 - `deployments/loadtest/k6.js`
 - `deployments/docker/restore-drill.sh`
 
@@ -758,12 +772,15 @@ See `docs/decisions/ADR-022-retention-deletion.md`.
 | Point 17: HTTP middleware | Complete |
 | Point 18: server and configuration | Complete |
 | Point 19: automated tests | Complete |
+| Point 19: `tests/` layout, load smoke and internal security review | Complete |
 | Point 20: deployment, health, metrics, runbooks | Complete |
 | Point 21: compliance documentation | Complete as a draft |
 
 ### Recent commits
 
 ```
+d0fa469 Add synthetic development seed data
+6f48c8c Add catalog administration and verified catalog import
 a25b684 Add tenant-approved break-glass access for platform admins
 c9208a3 Add MFA, password reset, user disable, and session purge
 0a008cf Add GDPR compliance documentation and legal review checklists
@@ -780,6 +797,13 @@ The following checks pass:
 - `go vet ./...` passes.
 - `go test ./...` passes.
 - `TEST_DB_URL=... go test -race ./...` passes.
+- `TEST_DB_URL=... go test ./tests/integration/... ./tests/security/...` passes.
+- The black-box suite in `tests/e2e` passes against a local server.
+- The read-only `cmd/loadgen` smoke run is recorded in
+  `docs/runbooks/load-testing.md`. The numbers are loopback smoke numbers, not
+  capacity evidence.
+- The internal review in `docs/security-review.md` records the checked areas,
+  the findings and the remaining gaps. It is not an external audit.
 - Migrations `internal/db/sql/schema/021_audit_hardening.sql`,
   `internal/db/sql/schema/022_auth_hardening.sql`,
   `internal/db/sql/schema/023_break_glass.sql`,
@@ -809,6 +833,10 @@ These are real gaps. They are not open design questions.
 11. The Compose file is a template, not a production orchestrator.
 12. No real Brandenburg catalog data is loaded. Test catalogs must stay clearly
     labelled until a domain expert verifies the real data.
+13. No external penetration test. `docs/security-review.md` is an internal
+    review, not an independent audit.
+14. The recorded load numbers are loopback smoke numbers. No staging capacity
+    test with database, pool and host telemetry has been run.
 
 ---
 
@@ -839,6 +867,10 @@ step 2 are complete.
 9. **Load verified catalog data.** Have a domain expert verify a real
    Brandenburg catalog, then import it with `cmd/catalogimport`. Keep the source
    note on the catalog and never load invented codes.
+10. **Prove security and capacity independently.** Commission an external
+    penetration test and run a staging load test with the monitoring stack
+    attached. Record both results; do not treat the internal review or the
+    loopback smoke numbers as a substitute.
 
 ---
 
@@ -849,5 +881,7 @@ step 2 are complete.
 | `docs/decisions/` | Architecture decision records, ADR-001 to ADR-025. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
+| `docs/security-review.md` | Internal security review; not an external audit. |
+| `tests/README.md` | Test layout, how to run each suite, and the critical-case map. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |
 | `docs/platform-admin-patient-access-reminder.txt` | The rule that `platform_admin` has no automatic patient access. |

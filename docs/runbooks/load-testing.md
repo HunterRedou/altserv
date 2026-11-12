@@ -17,6 +17,8 @@ traffic, and find the point where it stops meeting them.
 ## Test assets
 - `deployments/loadtest/k6.js`: read-only scenario for `/api/me`,
   `/api/patients`, `/healthz` and `/readyz`.
+- `cmd/loadgen`: stdlib read-only fallback for machines without k6. It uses the
+  same paths and thresholds and exits non-zero when a threshold fails.
 - `deployments/sql/explain-analyze.sql`: plans for the hot paths.
 - `deployments/monitoring/grafana-dashboard.json`: latency, error rate, pool,
   slow queries, login failures, job errors and backup age.
@@ -42,6 +44,26 @@ The script logs in once and shares the session cookie, so the login rate limiter
 is not part of the measurement. The default thresholds fail the run when the
 error rate is at or above 1 percent, p95 is at or above 500 ms, or p99 is at or
 above 1500 ms. Change the thresholds only with a documented reason.
+
+### Fallback without k6
+
+`cmd/loadgen` is a small stdlib generator for a machine where k6 is not
+installed. It logs in once, sends read-only GET requests with a fixed
+concurrency, and prints the request rate, error rate, latency percentiles and
+status distribution. It exits non-zero when the same thresholds fail.
+
+```bash
+go run ./cmd/loadgen \
+  -base https://staging.example.invalid \
+  -email loadtest@example.invalid -password '...' \
+  -paths /api/me,/api/patients,/healthz,/readyz \
+  -c 10 -d 2m -warmup 10s
+```
+
+Do not run it against production with a real chef account. It is a fallback for
+a repeatable smoke measurement, not a replacement for k6 or a capacity model.
+The `hey` command on some developer machines is the HEY email client, not
+rakyll/hey; check `hey --help` before using it.
 
 ## 3. Observe
 During the run, watch:
@@ -82,6 +104,25 @@ Keep a short result table:
 
 Attach the k6 summary and the Grafana snapshot. Do not attach plans or logs that
 contain patient data.
+
+### Recorded local smoke run (2026-11-12)
+
+This run used `cmd/loadgen` on loopback against one `go run .` process, the
+synthetic demo employee and synthetic patients from `cmd/devseed`. Measurement
+duration was 20 seconds after a 2-second warmup. It is a reproducibility check,
+not capacity evidence: it ran on the developer machine, not on staging, and it
+did not capture database, pool or host telemetry.
+
+| Paths | Concurrency | Requests | Requests/s | Errors | p95 | p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `/api/me`, `/api/patients`, `/healthz`, `/readyz` | 10 | 418,598 | 20,917 | 0 | 1.57 ms | 4.08 ms |
+| `/api/me`, `/api/patients`, `/healthz`, `/readyz` | 25 | 363,286 | 18,153 | 0 | 4.85 ms | 8.05 ms |
+| `/api/me`, `/api/patients`, `/healthz`, `/readyz` | 50 | 750,942 | 37,488 | 0 | 3.63 ms | 6.36 ms |
+| `/api/patients` | 10 | 242,363 | 12,114 | 0 | 1.41 ms | 4.72 ms |
+
+All runs met the default thresholds. The numbers are not a statement about
+production throughput; they only show that the read paths stay fast under a
+loopback smoke load.
 
 ## Known gaps
 - There is no write-path load test. A safe write test needs a disposable tenant
