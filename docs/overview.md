@@ -885,6 +885,7 @@ step 2 are complete.
 | Document | Content |
 | --- | --- |
 | `docs/decisions/` | Architecture decision records, ADR-001 to ADR-026. |
+| `docs/work/` | Work packages to the pilot, owner decisions, external reviews and the pilot gate. Start with `docs/work/README.md`. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `docs/security-review.md` | Internal security review; not an external audit. |
