@@ -748,6 +748,7 @@ See `docs/decisions/ADR-022-retention-deletion.md`.
 | Step 4: retention review and patient deletion | Complete |
 | Step 5: tenant termination | Complete |
 | Catalog administration and verified catalog import | Complete |
+| Synthetic development seed data | Complete |
 | Tenant isolation with row-level security | Complete |
 | Patient encryption and protected search | Complete |
 | Assignments, catalogs, templates, visits | Complete |
@@ -845,7 +846,7 @@ step 2 are complete.
 
 | Document | Content |
 | --- | --- |
-| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-024. |
+| `docs/decisions/` | Architecture decision records, ADR-001 to ADR-025. |
 | `docs/runbooks/` | Operations procedures for recovery, keys, incidents, deployment, load and slow queries. |
 | `docs/compliance/` | Data-protection and billing policies and checklists. |
 | `deployments/` | Docker, monitoring, load-test and SQL assets. |

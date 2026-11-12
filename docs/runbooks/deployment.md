@@ -37,6 +37,30 @@ For a destructive or non-backward-compatible change:
 Never run a destructive migration and the code that depends on it in the same
 step without a tested rollback.
 
+## Synthetic development data (development only)
+
+A fresh development database can be filled with one coherent demo tenant:
+
+```bash
+DEV_SEED_PASSWORD='a-long-demo-password' go run ./cmd/devseed
+```
+
+- The command refuses to run unless `PLATFORM=dev`. Never run it against a
+  production database.
+- It creates a tenant, a chef, an employee, a platform admin, a synthetic
+  catalog with three services, a contract, an activity rule, two patients,
+  assignments, a template and a planned visit.
+- The catalog code is `SYNTH-DEMO-2026`, every service code starts with
+  `SYNTH-`, and the source note marks the data as synthetic. Do not treat these
+  codes as real Brandenburg codes.
+- It refuses to run twice. Delete the demo tenant or use a fresh database to
+  reseed. A patient key rotation makes the old demo patients unreadable.
+- The demo users have no MFA enrolled, so a privileged login goes to MFA
+  enrollment first.
+
+Real reference data is loaded with `cmd/catalogimport` after professional
+verification, never with `devseed` (ADR-024, ADR-025).
+
 ## Rolling restart
 The process handles `SIGTERM` in this order:
 1. `/readyz` starts returning `503` and the load balancer stops new traffic.
