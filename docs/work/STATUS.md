@@ -2,7 +2,7 @@
 
 Update one line when a work package, decision or review changes.
 
-Last update: 2026-11-12.
+Last update: 2026-11-20.
 
 ## Done before this plan
 
@@ -19,7 +19,7 @@ Last update: 2026-11-12.
 | ID | Title | Phase | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | WP-00 | Rotate local keys | 0 | none | open |
-| WP-01 | Require DB TLS in prod | 0 | none | open |
+| WP-01 | Require DB TLS in prod | 0 | none | done (`df2957c`) |
 | WP-02 | Require `METRICS_TOKEN` in prod | 0 | none | open |
 | WP-03 | HSTS header in prod | 0 | none | open |
 | WP-04 | Separate DB roles | 0 | none | open |
