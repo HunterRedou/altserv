@@ -20,12 +20,50 @@ docker run --rm altserv:"$GIT_SHA" --help || true
 docker push registry.example.invalid/altserv:"$GIT_SHA"
 ```
 
+## Database roles
+Production uses three roles (WP-04). None is a superuser or the RDS master
+user.
+
+| Role | Login | Use |
+| --- | --- | --- |
+| `altserv_app` | no | Holds the table grants. The app switches to it with `SET LOCAL ROLE`. |
+| `altserv_migrator` | yes | Runs goose. Owns the tables, policies and functions. |
+| `altserv_runtime` | yes | The app connects as this role. Member of `altserv_app` only. |
+
+Do the steps in this order:
+1. The master user runs `deployments/sql/roles.sql` on the altserv database.
+   The file is idempotent. Run it again to rotate a password.
+   ```bash
+   psql "$MASTER_DB_URL" \
+     -v migrator_password="$MIGRATOR_PASSWORD" \
+     -v runtime_password="$RUNTIME_PASSWORD" \
+     -f deployments/sql/roles.sql
+   ```
+   The file stops without a change when a variable is missing. A password can
+   be a SCRAM-SHA-256 verifier; then the plain password is not in the server
+   log.
+2. `altserv_migrator` runs goose (next section). Use `MIGRATOR_DB_URL`.
+3. The app connects as `altserv_runtime`. Set `DB_URL` to the runtime URL.
+   Do not give the app the migrator or master URL.
+
+Keep the master password out of the app runtime and the CI. Use it only for
+step 1.
+
+Local development keeps the `postgres` user. The roles are optional there. To
+run `TestRuntimeRoleCannotEscalate`, run step 1 on `altserv_test` as
+`postgres`.
+
+Known gap: see "Notes" in `docs/work/WP-04.md`. The public paths (tenant
+registration, login lookup, session lookup) and three `SECURITY DEFINER`
+functions still need a role that bypasses RLS. Do not switch production to
+`altserv_runtime` before that is fixed.
+
 ## Migrations
 Run goose before the new application only when the migration is backward
 compatible with the old version.
 ```bash
-goose -dir internal/db/sql/schema postgres "$DB_URL" status
-goose -dir internal/db/sql/schema postgres "$DB_URL" up
+goose -dir internal/db/sql/schema postgres "$MIGRATOR_DB_URL" status
+goose -dir internal/db/sql/schema postgres "$MIGRATOR_DB_URL" up
 ```
 For a destructive or non-backward-compatible change:
 1. deploy the expand step
