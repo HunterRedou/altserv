@@ -390,6 +390,7 @@ func TestLoadRequiresVerifiedDatabaseTLSInProd(t *testing.T) {
 			}
 			t.Setenv("DB_URL", dbURL)
 			t.Setenv("PLATFORM", tt.platform)
+			t.Setenv("METRICS_TOKEN", "0123456789abcdef")
 
 			_, err := Load()
 			if !tt.wantErr {
@@ -410,6 +411,39 @@ func TestLoadRequiresVerifiedDatabaseTLSInProd(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadRequiresMetricsTokenInProd(t *testing.T) {
+	const prodDBURL = "postgres://user:pass@localhost:5432/altserv?sslmode=verify-full"
+
+	t.Run("prod without a token fails", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("PLATFORM", "prod")
+		t.Setenv("DB_URL", prodDBURL)
+		t.Setenv("METRICS_TOKEN", "")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "METRICS_TOKEN") {
+			t.Fatalf("Load err = %v, want METRICS_TOKEN error", err)
+		}
+	})
+
+	t.Run("prod with a 16-character token starts", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("PLATFORM", "prod")
+		t.Setenv("DB_URL", prodDBURL)
+		t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+	})
+
+	t.Run("dev without a token starts", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("METRICS_TOKEN", "")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+	})
 }
 
 func TestLoadBillingTransmissionAdapter(t *testing.T) {
@@ -442,6 +476,7 @@ func TestLoadBillingTransmissionAdapter(t *testing.T) {
 		setValidBaseEnv(t)
 		t.Setenv("PLATFORM", "prod")
 		t.Setenv("DB_URL", "postgres://user:pass@localhost:5432/altserv?sslmode=verify-full")
+		t.Setenv("METRICS_TOKEN", "0123456789abcdef")
 		t.Setenv("BILLING_TRANSMISSION_ADAPTER", "test")
 		_, err := Load()
 		if err == nil || !strings.Contains(err.Error(), "BILLING_TRANSMISSION_ADAPTER") {

@@ -5,7 +5,7 @@
 | --- | --- | --- |
 | `GET /healthz` | Liveness. The process is running. It does not touch the database. | Public |
 | `GET /readyz` | Readiness. The database is reachable and the process is not draining. | Public |
-| `GET /metrics` | Prometheus text exposition. | Public by default; set `METRICS_TOKEN` and send `Authorization: Bearer <token>` in production |
+| `GET /metrics` | Prometheus text exposition. | Public in development when `METRICS_TOKEN` is empty. Production requires `METRICS_TOKEN`; send `Authorization: Bearer <token>` |
 
 The health responses contain only `{"status":"ok"}`, `{"status":"ready"}`,
 `{"status":"draining"}` or `{"status":"unavailable"}`. They never contain a

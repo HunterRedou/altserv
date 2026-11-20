@@ -85,6 +85,9 @@ func (c Config) validate() error {
 	if c.ShutdownDrainDelay > maxShutdownDrainDelay {
 		return fmt.Errorf("SHUTDOWN_DRAIN_DELAY must not exceed %s, got %s", maxShutdownDrainDelay, c.ShutdownDrainDelay)
 	}
+	if c.Platform == "prod" && c.MetricsToken == "" {
+		return fmt.Errorf("METRICS_TOKEN must be set when PLATFORM=prod")
+	}
 	if c.MetricsToken != "" && len(c.MetricsToken) < minMetricsTokenLength {
 		return fmt.Errorf("METRICS_TOKEN must be at least %d characters when set", minMetricsTokenLength)
 	}

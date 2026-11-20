@@ -188,7 +188,7 @@ source code, in Git or in a log.
 | `DB_CONN_MAX_LIFETIME` | `30m` | Positive. |
 | `SHUTDOWN_DRAIN_DELAY` | `5s` | Maximum 5 min. |
 | `SLOW_QUERY_THRESHOLD` | `1s` | Maximum 1 min. |
-| `METRICS_TOKEN` | empty | Optional; at least 16 characters. |
+| `METRICS_TOKEN` | empty | Required when `PLATFORM=prod`; at least 16 characters. |
 | `BACKUP_MARKER_FILE` | empty | Optional marker for the backup-age metric. |
 
 ### Rules
