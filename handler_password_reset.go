@@ -10,13 +10,15 @@ import (
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/mail"
 )
 
 var errResetTokenInvalid = errors.New("password reset token is invalid")
 
 // handlerPasswordResetRequest is public. It never reveals whether an account
-// exists. In development it returns the token so the flow can be tested without
-// an email sender. Production delivery is deliberately not configured yet.
+// exists. The reset link goes to the account address through cfg.mailer. In
+// development the response also contains the token, so the flow can be tested
+// without a mail provider.
 func (cfg *apiConfig) handlerPasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email string `json:"email"`
@@ -48,9 +50,12 @@ func (cfg *apiConfig) handlerPasswordResetRequest(w http.ResponseWriter, r *http
 			"auth.password_reset_requested",
 			requestIDFromContext(r.Context()),
 		)
-		if issueErr == nil && cfg.platform == "dev" {
-			out.Token = token
-			out.ExpiresAt = &expiresAt
+		if issueErr == nil {
+			cfg.sendMail(r.Context(), mail.PasswordResetMessage(user.Email, cfg.passwordResetLink(token), passwordResetTTL))
+			if cfg.platform == "dev" {
+				out.Token = token
+				out.ExpiresAt = &expiresAt
+			}
 		}
 	}
 

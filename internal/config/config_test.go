@@ -494,3 +494,90 @@ func TestLoadBillingTransmissionAdapter(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadMailAdapter(t *testing.T) {
+	const prodDBURL = "postgres://user:pass@localhost:5432/altserv?sslmode=verify-full"
+
+	t.Run("defaults to none", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("MAIL_ADAPTER", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.MailAdapter != "none" {
+			t.Fatalf("MailAdapter = %q, want none", cfg.MailAdapter)
+		}
+	})
+
+	t.Run("allows log in dev", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("MAIL_ADAPTER", "log")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.MailAdapter != "log" {
+			t.Fatalf("MailAdapter = %q, want log", cfg.MailAdapter)
+		}
+	})
+
+	t.Run("prod rejects log", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("PLATFORM", "prod")
+		t.Setenv("DB_URL", prodDBURL)
+		t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+		t.Setenv("MAIL_ADAPTER", "log")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "MAIL_ADAPTER") {
+			t.Fatalf("Load err = %v, want MAIL_ADAPTER error", err)
+		}
+	})
+
+	t.Run("prod allows none", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("PLATFORM", "prod")
+		t.Setenv("DB_URL", prodDBURL)
+		t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+		t.Setenv("MAIL_ADAPTER", "none")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+	})
+
+	t.Run("rejects an unknown adapter", func(t *testing.T) {
+		setValidBaseEnv(t)
+		t.Setenv("MAIL_ADAPTER", "smtp")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load returned nil error for MAIL_ADAPTER=smtp")
+		}
+	})
+
+	t.Run("validates APP_BASE_URL", func(t *testing.T) {
+		cases := []struct {
+			platform string
+			value    string
+			wantErr  bool
+		}{
+			{platform: "dev", value: "http://localhost:8080", wantErr: false},
+			{platform: "dev", value: "https://altserv.example", wantErr: false},
+			{platform: "dev", value: "altserv.example", wantErr: true},
+			{platform: "dev", value: "ftp://altserv.example", wantErr: true},
+			{platform: "prod", value: "http://altserv.example", wantErr: true},
+			{platform: "prod", value: "https://altserv.example", wantErr: false},
+		}
+		for _, tt := range cases {
+			setValidBaseEnv(t)
+			t.Setenv("PLATFORM", tt.platform)
+			if tt.platform == "prod" {
+				t.Setenv("DB_URL", prodDBURL)
+				t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+			}
+			t.Setenv("APP_BASE_URL", tt.value)
+			_, err := Load()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("PLATFORM=%s APP_BASE_URL=%q: err = %v, wantErr %v", tt.platform, tt.value, err, tt.wantErr)
+			}
+		}
+	})
+}

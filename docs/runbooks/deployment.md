@@ -258,6 +258,18 @@ report or billing transaction.
   ```
   The result must be `false`.
 
+## Account mail
+
+- `MAIL_ADAPTER` selects how password-reset and MFA-change mails are sent.
+  `none` (default) sends nothing. `log` logs the recipient and subject, never
+  the body. The app refuses to start with `MAIL_ADAPTER=log` unless
+  `PLATFORM=dev`.
+- Until WP-17 adds a provider, production keeps `MAIL_ADAPTER=none`. Users
+  then get no reset mail; an admin issues a reset through
+  `POST /api/users/{id}/password-reset`.
+- `APP_BASE_URL` is the origin for the reset link. It must use `https` when
+  `PLATFORM=prod`.
+
 ## Verify
 ```bash
 curl -fsS https://altserv.example.invalid/healthz

@@ -23,6 +23,8 @@ const (
 	defaultRetentionReviewInterval = 24 * time.Hour
 	// defaultBillingTransmissionAdapter never sends a claim.
 	defaultBillingTransmissionAdapter = "unconfigured"
+	// defaultMailAdapter sends no mail.
+	defaultMailAdapter = "none"
 )
 
 // Config is the runtime configuration loaded from environment variables.
@@ -83,6 +85,15 @@ type Config struct {
 	// §302 SGB V procedure is professionally verified. "test" is a synthetic
 	// in-process payer and is only allowed when PLATFORM=dev.
 	BillingTransmissionAdapter string
+
+	// MailAdapter selects how account mails are sent. "none" (default) sends
+	// nothing. "log" logs recipient and subject and is only allowed when
+	// PLATFORM=dev. A real provider follows in WP-17.
+	MailAdapter string
+
+	// AppBaseURL is the public origin used to build links in mails, for
+	// example https://altserv.example. Empty gives a relative link.
+	AppBaseURL string
 }
 
 // Load reads the environment, applies defaults and validates the result.
@@ -110,6 +121,8 @@ func Load() (Config, error) {
 		RetentionReviewInterval: defaultRetentionReviewInterval,
 
 		BillingTransmissionAdapter: envOrDefault("BILLING_TRANSMISSION_ADAPTER", defaultBillingTransmissionAdapter),
+		MailAdapter:                envOrDefault("MAIL_ADAPTER", defaultMailAdapter),
+		AppBaseURL:                 os.Getenv("APP_BASE_URL"),
 	}
 
 	if raw := os.Getenv("SESSION_DURATION"); raw != "" {

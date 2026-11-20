@@ -149,6 +149,25 @@ func (c Config) validate() error {
 	default:
 		return fmt.Errorf("BILLING_TRANSMISSION_ADAPTER must be unconfigured or test, got %q", c.BillingTransmissionAdapter)
 	}
+	switch c.MailAdapter {
+	case "none":
+	case "log":
+		// The log adapter delivers nothing, so a real user never gets the mail.
+		if c.Platform != "dev" {
+			return fmt.Errorf("MAIL_ADAPTER=log is only allowed when PLATFORM=dev")
+		}
+	default:
+		return fmt.Errorf("MAIL_ADAPTER must be none or log, got %q", c.MailAdapter)
+	}
+	if c.AppBaseURL != "" {
+		base, err := url.Parse(c.AppBaseURL)
+		if err != nil || base.Host == "" || (base.Scheme != "https" && base.Scheme != "http") {
+			return fmt.Errorf("APP_BASE_URL must be an absolute http or https URL")
+		}
+		if c.Platform == "prod" && base.Scheme != "https" {
+			return fmt.Errorf("APP_BASE_URL must use https when PLATFORM=prod")
+		}
+	}
 
 	return nil
 }

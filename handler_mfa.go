@@ -11,6 +11,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/audit"
 	"github.com/HunterRedou/altserv/internal/auth"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/mail"
 	"github.com/google/uuid"
 )
 
@@ -272,6 +273,8 @@ func (cfg *apiConfig) handlerMFAConfirm(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	cfg.sendMail(r.Context(), mail.MFAEnabledMessage(actor.Email))
+
 	respondWithJSON(w, http.StatusOK, map[string]any{"recovery_codes": codes})
 }
 
@@ -342,6 +345,8 @@ func (cfg *apiConfig) handlerMFADisable(w http.ResponseWriter, r *http.Request) 
 		respondWithError(w, http.StatusInternalServerError, "Couldn't disable MFA", err)
 		return
 	}
+
+	cfg.sendMail(r.Context(), mail.MFADisabledMessage(actor.Email))
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "mfa disabled"})
 }

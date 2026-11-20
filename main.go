@@ -19,6 +19,7 @@ import (
 	"github.com/HunterRedou/altserv/internal/catalog"
 	"github.com/HunterRedou/altserv/internal/config"
 	"github.com/HunterRedou/altserv/internal/db"
+	"github.com/HunterRedou/altserv/internal/mail"
 	"github.com/HunterRedou/altserv/internal/observability"
 	"github.com/HunterRedou/altserv/internal/patients"
 	"github.com/HunterRedou/altserv/internal/reports"
@@ -55,6 +56,8 @@ type apiConfig struct {
 	metrics              *observability.Registry
 	health               *observability.Health
 	metricsToken         string
+	mailer               mail.Mailer
+	appBaseURL           string
 }
 
 func main() {
@@ -116,6 +119,10 @@ func main() {
 		billingTransmitter = billing.TestPayer{}
 		log.Printf("billing transmission: synthetic test payer enabled (PLATFORM=dev)")
 	}
+	if cfg.MailAdapter == mail.AdapterLog {
+		// config.Load only allows the log adapter with PLATFORM=dev.
+		log.Printf("mail: log adapter enabled (PLATFORM=dev); no mail is delivered")
+	}
 	billingService := billing.NewServiceWithTransmitter(billing.NewRepository(), auditRecorder, billingTransmitter)
 	breakGlassService := breakglass.NewService(breakglass.NewRepository(), auditRecorder, patientService)
 	retentionService := retention.NewService(retention.NewRepository(), auditRecorder)
@@ -142,6 +149,8 @@ func main() {
 		metrics:              metrics,
 		health:               health,
 		metricsToken:         cfg.MetricsToken,
+		mailer:               mail.New(cfg.MailAdapter),
+		appBaseURL:           cfg.AppBaseURL,
 	}
 
 	// Pick up tenants that were still pending when the previous process stopped.
