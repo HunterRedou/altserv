@@ -7,9 +7,13 @@ import (
 
 // middlewareSecurityHeaders sets conservative defaults for every response.
 // API responses must not be cached because they may contain patient data.
+// HSTS is only sent in prod so a dev browser on localhost does not remember it.
 func (cfg *apiConfig) middlewareSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
+		if cfg.platform == "prod" {
+			header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("X-Frame-Options", "DENY")
 		header.Set("Referrer-Policy", "no-referrer")

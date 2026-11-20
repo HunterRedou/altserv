@@ -22,7 +22,7 @@ The review covered the application process and its PostgreSQL schema:
 - an external penetration test or an independent security audit
 - the hosting provider, the operating system, the container runtime and the
   reverse proxy
-- a production secret manager, TLS certificate handling and HSTS at the edge
+- a production secret manager and TLS certificate handling at the edge
 - a real production-sized load test
 - point-in-time recovery, off-site backups and restore drills
 - the professional legal, billing and data-protection review
@@ -52,6 +52,7 @@ The review covered the application process and its PostgreSQL schema:
 | Audit metadata contains no patient names | Pass | `tests/security/TestAuditMetadataContainsNoPatientNames` |
 | Logs contain no query string or body | Pass | `middleware_hardening_test.go`, `middleware_logging_test.go` |
 | Security headers | Pass | `tests/e2e/TestSecurityHeaders`, `middleware_hardening_test.go` |
+| HSTS (`max-age=31536000; includeSubDomains`, no `preload`) only when `PLATFORM=prod` | Pass | `TestSecurityHeadersHSTSOnlyInProd` in `middleware_hardening_test.go` |
 | `/metrics` bearer token | Pass when `METRICS_TOKEN` is set | `tests/e2e/TestMetricsToken`, `observability_wiring_test.go` |
 | Login, CSRF and logout | Pass | `tests/e2e/TestLoginFlow`, `handler_sessions_db_test.go` |
 | Read-path smoke load | Pass on loopback | `docs/runbooks/load-testing.md` |
@@ -92,7 +93,8 @@ The following are known gaps, not surprises:
 3. **No shipped PITR product and no recorded PITR drill.** Backups and the
    restore drill exist, but point-in-time recovery is an operator task.
 4. **Production hardening is incomplete.** Secrets still come from the
-   environment; TLS and HSTS belong to the edge; `METRICS_TOKEN` is optional in
+   environment; TLS ends at the edge (the app sends HSTS in prod, which the
+   browser only accepts over HTTPS); `METRICS_TOKEN` is optional in
    local development; the login rate limiter is per process.
 5. **Billing transmission is deliberately `not_configured`.** There is no
    automatic transmission to a care fund and no payer integration.
@@ -117,7 +119,7 @@ The following are known gaps, not surprises:
    `docs/compliance/review-record.md` when the professional review is signed.
 2. Add an external append-only audit sink.
 3. Ship and drill a PITR procedure.
-4. Move secrets to a secret manager, enforce TLS/HSTS at the edge, require
+4. Move secrets to a secret manager, enforce TLS at the edge, require
    `METRICS_TOKEN` in production and connect an alert receiver.
 5. Run a staging load test with the monitoring stack attached.
 

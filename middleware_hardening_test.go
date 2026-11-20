@@ -36,6 +36,31 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestSecurityHeadersHSTSOnlyInProd(t *testing.T) {
+	tests := []struct {
+		platform string
+		want     string
+	}{
+		{platform: "prod", want: "max-age=31536000; includeSubDomains"},
+		{platform: "dev", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			cfg := &apiConfig{platform: tt.platform}
+			handler := cfg.middlewareSecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/patients", nil))
+
+			if got := rec.Header().Get("Strict-Transport-Security"); got != tt.want {
+				t.Errorf("Strict-Transport-Security = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBodyLimitRejectsLargeBody(t *testing.T) {
 	cfg := &apiConfig{}
 	handler := cfg.middlewareBodyLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
