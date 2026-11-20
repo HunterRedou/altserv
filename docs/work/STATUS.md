@@ -24,7 +24,7 @@ Last update: 2026-11-20.
 | WP-03 | HSTS header in prod | 0 | none | done (`1fd6d21`) |
 | WP-04 | Separate DB roles | 0 | none | in progress (blocked, see card) |
 | WP-05 | Tenant status and manual activation | 0 | none | done (`2bdc85a`) |
-| WP-06 | Mail interface and fake mailer | 0 | none | open |
+| WP-06 | Mail interface and fake mailer | 0 | none | done (`6a7e6cf`) |
 | WP-07 | Terraform network | 2 | D-1 | blocked |
 | WP-08 | Terraform RDS | 2 | WP-07, WP-01, WP-04 | blocked |
 | WP-09 | App runtime and secrets | 2 | WP-08 | blocked |
