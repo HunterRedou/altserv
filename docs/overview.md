@@ -175,7 +175,7 @@ source code, in Git or in a log.
 
 | Variable | Default | Rule |
 | --- | --- | --- |
-| `DB_URL` | none | Required. |
+| `DB_URL` | none | Required. With `PLATFORM=prod`, must set `sslmode=verify-full`. |
 | `PLATFORM` | `dev` | Environment name. |
 | `PORT` | `8080` | Listen port. |
 | `SESSION_DURATION` | `24h` | Positive, maximum 30 days. |

@@ -51,6 +51,15 @@ func (c Config) validate() error {
 		return fmt.Errorf("PLATFORM must be dev or prod, got %q", c.Platform)
 	}
 
+	// require does not check the server certificate and verify-ca does not
+	// check the host name, so a man-in-the-middle can still read patient data.
+	// The error must not echo the URL: it can contain the database password.
+	if c.Platform == "prod" {
+		if sslmode := parsed.Query().Get("sslmode"); sslmode != "verify-full" {
+			return fmt.Errorf("DB_URL sslmode must be verify-full when PLATFORM=prod, got %q", sslmode)
+		}
+	}
+
 	if c.SessionDuration <= 0 {
 		return fmt.Errorf("SESSION_DURATION must be positive, got %s", c.SessionDuration)
 	}

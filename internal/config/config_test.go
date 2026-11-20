@@ -359,6 +359,59 @@ func TestLoad(t *testing.T) {
 	})
 }
 
+func TestLoadRequiresVerifiedDatabaseTLSInProd(t *testing.T) {
+	const password = "s3cret-db-password"
+	cases := []struct {
+		platform string
+		sslmode  string
+		wantErr  bool
+	}{
+		{platform: "dev", sslmode: "", wantErr: false},
+		{platform: "dev", sslmode: "disable", wantErr: false},
+		{platform: "dev", sslmode: "allow", wantErr: false},
+		{platform: "dev", sslmode: "prefer", wantErr: false},
+		{platform: "dev", sslmode: "require", wantErr: false},
+		{platform: "dev", sslmode: "verify-ca", wantErr: false},
+		{platform: "dev", sslmode: "verify-full", wantErr: false},
+		{platform: "prod", sslmode: "", wantErr: true},
+		{platform: "prod", sslmode: "disable", wantErr: true},
+		{platform: "prod", sslmode: "allow", wantErr: true},
+		{platform: "prod", sslmode: "prefer", wantErr: true},
+		{platform: "prod", sslmode: "require", wantErr: true},
+		{platform: "prod", sslmode: "verify-ca", wantErr: true},
+		{platform: "prod", sslmode: "verify-full", wantErr: false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.platform+"/"+tt.sslmode, func(t *testing.T) {
+			setValidBaseEnv(t)
+			dbURL := "postgres://user:" + password + "@localhost:5432/altserv"
+			if tt.sslmode != "" {
+				dbURL += "?sslmode=" + tt.sslmode + "&sslrootcert=/etc/ssl/rds.pem"
+			}
+			t.Setenv("DB_URL", dbURL)
+			t.Setenv("PLATFORM", tt.platform)
+
+			_, err := Load()
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Load returned nil error for PLATFORM=%s sslmode=%q", tt.platform, tt.sslmode)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, "DB_URL") || !strings.Contains(msg, "sslmode") {
+				t.Errorf("error %q does not name DB_URL and sslmode", msg)
+			}
+			if strings.Contains(msg, password) {
+				t.Errorf("error %q leaks the database password", msg)
+			}
+		})
+	}
+}
+
 func TestLoadBillingTransmissionAdapter(t *testing.T) {
 	t.Run("defaults to unconfigured", func(t *testing.T) {
 		setValidBaseEnv(t)
@@ -388,6 +441,7 @@ func TestLoadBillingTransmissionAdapter(t *testing.T) {
 	t.Run("rejects the test payer in prod", func(t *testing.T) {
 		setValidBaseEnv(t)
 		t.Setenv("PLATFORM", "prod")
+		t.Setenv("DB_URL", "postgres://user:pass@localhost:5432/altserv?sslmode=verify-full")
 		t.Setenv("BILLING_TRANSMISSION_ADAPTER", "test")
 		_, err := Load()
 		if err == nil || !strings.Contains(err.Error(), "BILLING_TRANSMISSION_ADAPTER") {
