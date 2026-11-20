@@ -7,7 +7,22 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
+
+const getTenantStatusForUpdate = `-- name: GetTenantStatusForUpdate :one
+SELECT status FROM tenants
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) GetTenantStatusForUpdate(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTenantStatusForUpdate, id)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
 
 const selectPendingTenants = `-- name: SelectPendingTenants :many
 SELECT id, created_at, updated_at, email, ustid, streetname, plz, hashed_password, status FROM tenants

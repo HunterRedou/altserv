@@ -140,6 +140,33 @@ report or billing transaction.
   live database; restore from backup if needed.
 - The append-only trigger still blocks ordinary deletes from `audit_events`.
 
+## Tenant activation and suspension
+
+- Migration `internal/db/sql/schema/028_tenant_suspended.sql` adds the
+  `suspended` value to `tenants_status_check`. The values are now `pending`,
+  `valid`, `invalid` and `suspended`.
+- Only `valid` can log in. Session lookup, MFA login and password reset also
+  need `valid`. A suspended tenant keeps all its data.
+- Use the operator tool. It does not need VIES:
+  ```bash
+  go run ./cmd/tenantadmin -tenant "$TENANT_ID" -action activate
+  go run ./cmd/tenantadmin -tenant "$TENANT_ID" -action suspend
+  ```
+  `DB_URL` must be a connection role that is a member of `altserv_app`.
+- `activate` sets `valid`. `suspend` sets `suspended`. Existing sessions of a
+  suspended tenant stop working at the next request.
+- Each change writes one audit event, `tenant.activated` or
+  `tenant.suspended`, with the old status and the new status only. The actor
+  user id is `NULL`. If the tenant already has the target status, nothing
+  changes and no event is written.
+- The tool never deletes a tenant. It cannot activate a terminated tenant:
+  `terminate_tenant` deletes the row, so the tool reports
+  `tenant not found or terminated`.
+- The VIES sweep re-checks only `pending` tenants. It does not touch a
+  suspended tenant.
+- Migration 028 down fails while a tenant is `suspended`. Activate or review
+  those tenants first.
+
 ## Catalog administration after deploy
 
 - Migration `internal/db/sql/schema/026_catalog_administration.sql` adds
