@@ -21,7 +21,7 @@ Last update: 2026-11-20.
 | WP-00 | Rotate local keys | 0 | none | open |
 | WP-01 | Require DB TLS in prod | 0 | none | done (`df2957c`) |
 | WP-02 | Require `METRICS_TOKEN` in prod | 0 | none | done (`5b950da`) |
-| WP-03 | HSTS header in prod | 0 | none | open |
+| WP-03 | HSTS header in prod | 0 | none | done (`1fd6d21`) |
 | WP-04 | Separate DB roles | 0 | none | open |
 | WP-05 | Tenant status and manual activation | 0 | none | open |
 | WP-06 | Mail interface and fake mailer | 0 | none | open |
